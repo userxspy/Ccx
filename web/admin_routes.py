@@ -439,10 +439,23 @@ async def delete_file_api(request):
 @admin_routes.get('/dashboard')
 async def admin_dashboard(request):
     if not is_logged_in(request): return web.HTTPFound('/admin')
-    stats = await db_count_documents()
-    total_u = await user_db.total_users_count()
+    try:
+        stats = await db_count_documents()
+    except Exception:
+        stats = {}
+    try:
+        total_u = await user_db.total_users_count()
+    except Exception:
+        total_u = 0
+    # db_count_documents() may return int or dict — handle both
+    if isinstance(stats, int):
+        stats = {'total': stats, 'primary': stats, 'cloud': 0, 'archive': 0}
+    p_count = stats.get('primary', 0)
+    c_count = stats.get('cloud', 0)
+    a_count = stats.get('archive', 0)
+    tb = topbar_html('dashboard')
     html = f"""<!DOCTYPE html><html><head><title>Dashboard</title>{SHARED_HEAD}{THEME_JS}</head><body>
-{topbar_html('dashboard')}
+{tb}
 {SIDEBAR_JS}
 <div class="search-zone">
   <div class="search-row">
@@ -453,17 +466,17 @@ async def admin_dashboard(request):
       <button class="ftab" data-col="archive" onclick="setCol(this)">Archive</button>
     </div>
     <div class="search-wrap">
-      <span class="s-icon">⌕</span>
-      <input class="search-input" id="q" placeholder="Search files to manage…">
+      <span class="s-icon">&#9906;</span>
+      <input class="search-input" id="q" placeholder="Search files to manage&#8230;">
     </div>
     <button class="search-btn" onclick="doSearch(0)">Search</button>
   </div>
 </div>
 <div class="main">
   <div class="stats-row">
-    <div class="scard green"><div class="scard-label">Primary</div><div class="scard-val">{stats.get('primary',0):,}</div><div class="scard-sub">Main collection</div></div>
-    <div class="scard blue"><div class="scard-label">Cloud</div><div class="scard-val">{stats.get('cloud',0):,}</div><div class="scard-sub">Remote storage</div></div>
-    <div class="scard amber"><div class="scard-label">Archive</div><div class="scard-val">{stats.get('archive',0):,}</div><div class="scard-sub">Backup files</div></div>
+    <div class="scard green"><div class="scard-label">Primary</div><div class="scard-val">{p_count:,}</div><div class="scard-sub">Main collection</div></div>
+    <div class="scard blue"><div class="scard-label">Cloud</div><div class="scard-val">{c_count:,}</div><div class="scard-sub">Remote storage</div></div>
+    <div class="scard amber"><div class="scard-label">Archive</div><div class="scard-val">{a_count:,}</div><div class="scard-sub">Backup files</div></div>
     <div class="scard red"><div class="scard-label">Users</div><div class="scard-val">{total_u:,}</div><div class="scard-sub">Total registered</div></div>
   </div>
   <div class="results-info" id="resInfo">
@@ -471,12 +484,12 @@ async def admin_dashboard(request):
     <span class="results-hint">Edit or delete below</span>
   </div>
   <div id="results">
-    <div class="empty"><div class="empty-icon">◈</div><p>Search files above to view, edit or delete them</p></div>
+    <div class="empty"><div class="empty-icon">&#9672;</div><p>Search files above to view, edit or delete them</p></div>
   </div>
   <div class="pagination" id="pageBox">
-    <button class="pg-btn" id="pBtn" onclick="prev()" disabled>← Previous</button>
+    <button class="pg-btn" id="pBtn" onclick="prev()" disabled>&#8592; Previous</button>
     <span class="pg-info" id="pgInfo">Page 1</span>
-    <button class="pg-btn" id="nBtn" onclick="next()">Next →</button>
+    <button class="pg-btn" id="nBtn" onclick="next()">Next &#8594;</button>
   </div>
 </div>
 <div class="modal-overlay" id="editModal">
