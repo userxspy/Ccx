@@ -9,14 +9,21 @@ from hydrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 admin_routes = web.RouteTableDef()
 
+
+def safe_html_response(html: str) -> web.Response:
+    """Surrogate-safe HTML response — future UnicodeEncodeError से बचाता है."""
+    clean = html.encode('utf-8', errors='replace').decode('utf-8')
+    return web.Response(text=clean, content_type='text/html', charset='utf-8')
+
+
 def is_logged_in(request):
     session_id = request.cookies.get('admin_session')
     if not hasattr(temp, 'ADMIN_SESSIONS'): return False
     return session_id in temp.ADMIN_SESSIONS and time.time() < temp.ADMIN_SESSIONS[session_id]
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # SHARED ASSETS (injected into every page)
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 SHARED_HEAD = """
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -35,7 +42,7 @@ body.light{
 }
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .25s,color .25s;overflow-x:hidden}
 
-/* ── TOPBAR ── */
+/* -- TOPBAR -- */
 .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;height:54px;position:sticky;top:0;z-index:100;gap:12px;transition:background .25s,border-color .25s}
 .ham-btn{background:none;border:none;cursor:pointer;color:var(--text);display:flex;flex-direction:column;gap:5px;padding:6px;border-radius:6px;transition:background .15s;flex-shrink:0}
 .ham-btn:hover{background:var(--bg3)}
@@ -51,7 +58,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;letter-spacing:.04em;transition:all .15s;display:flex;align-items:center;gap:5px}
 .theme-btn:hover{border-color:var(--accent);color:var(--text)}
 
-/* ── SIDEBAR ── */
+/* -- SIDEBAR -- */
 .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;opacity:0;pointer-events:none;transition:opacity .25s}
 .sidebar-overlay.open{opacity:1;pointer-events:all}
 .sidebar{position:fixed;top:0;left:0;height:100%;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);z-index:160;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
@@ -74,7 +81,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .sb-logout{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;text-decoration:none;color:#ff6b6b;font-size:14px;font-weight:500;transition:all .15s;border:1px solid transparent;width:100%;background:none;cursor:pointer;font-family:'DM Sans',sans-serif}
 .sb-logout:hover{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.25)}
 
-/* ── SEARCH ZONE ── */
+/* -- SEARCH ZONE -- */
 .search-zone{padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);transition:background .25s}
 .search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .filter-tabs{display:flex;gap:3px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:3px;flex-shrink:0;transition:background .25s}
@@ -88,7 +95,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .search-btn{background:var(--accent);color:#08090d;border:none;border-radius:8px;padding:10px 18px;font-weight:600;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:opacity .15s}
 .search-btn:hover{opacity:.85}
 
-/* ── MAIN ── */
+/* -- MAIN -- */
 .main{padding:20px;max-width:900px;margin:0 auto}
 
 /* STATS */
@@ -184,13 +191,13 @@ function toggleTheme(){
   var l=document.body.classList.toggle('light');
   localStorage.setItem('theme',l?'light':'dark');
   var b=document.getElementById('themeBtn');
-  if(b){b.querySelector('.ti').textContent=l?'☽':'☀';b.querySelector('.tl').textContent=l?'Dark':'Light';}
+  if(b){b.querySelector('.ti').textContent=l?'&#9661;':'&#9728;';b.querySelector('.tl').textContent=l?'Dark':'Light';}
 }
 function initThemeBtn(){
   var b=document.getElementById('themeBtn');
   if(!b)return;
   var l=document.body.classList.contains('light');
-  b.querySelector('.ti').textContent=l?'☽':'☀';
+  b.querySelector('.ti').textContent=l?'&#9661;':'&#9728;';
   b.querySelector('.tl').textContent=l?'Dark':'Light';
 }
 </script>"""
@@ -200,19 +207,19 @@ SIDEBAR_HTML = """
 <div class="sidebar" id="sidebar">
   <div class="sb-header">
     <div class="sb-logo"><div class="logo-dot"></div>CINEMATIC_BOT</div>
-    <button class="sb-close" onclick="closeSidebar()">✕</button>
+    <button class="sb-close" onclick="closeSidebar()">&#10005;</button>
   </div>
   <nav class="sb-nav">
     <div class="sb-section">Navigation</div>
     <a href="/dashboard" class="sb-link {active_dash}">
-      <span class="sb-icon">⊞</span> Dashboard <span class="sb-arrow">›</span>
+      <span class="sb-icon">&#8862;</span> Dashboard <span class="sb-arrow">&#8250;</span>
     </a>
     <a href="/search" class="sb-link {active_search}">
-      <span class="sb-icon">⌕</span> Search Files <span class="sb-arrow">›</span>
+      <span class="sb-icon">&#8981;</span> Search Files <span class="sb-arrow">&#8250;</span>
     </a>
   </nav>
   <div class="sb-footer">
-    <a href="/logout" class="sb-logout"><span class="sb-icon">⎋</span> Logout</a>
+    <a href="/logout" class="sb-logout"><span class="sb-icon">&#9003;</span> Logout</a>
   </div>
 </div>"""
 
@@ -325,20 +332,20 @@ def topbar_html(active):
   <a class="logo" href="/dashboard"><div class="logo-dot"></div>CINEMATIC_BOT</a>
   <div class="topbar-right">
     <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
-      <span class="ti">☀</span><span class="tl">Light</span>
+      <span class="ti">&#9728;</span><span class="tl">Light</span>
     </button>
   </div>
 </div>"""
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # LOGIN PAGE
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 @admin_routes.get('/admin')
 async def login_page(request):
     html = f"""<!DOCTYPE html><html><head><title>Login</title>{SHARED_HEAD}{THEME_JS}</head><body>
 <div class="theme-corner">
   <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
-    <span class="ti">☀</span><span class="tl">Light</span>
+    <span class="ti">&#9728;</span><span class="tl">Light</span>
   </button>
 </div>
 <div class="login-wrap"><div class="login-box">
@@ -351,13 +358,13 @@ async def login_page(request):
       <input type="text" name="user" placeholder="admin" required autocomplete="off">
       <label>Password</label>
       <input type="password" name="pass" placeholder="••••••••" required>
-      <button class="submit-btn" type="submit">Sign in →</button>
+      <button class="submit-btn" type="submit">Sign in &#8594;</button>
     </form>
   </div>
 </div></div>
 <script>document.addEventListener('DOMContentLoaded',initThemeBtn);</script>
 </body></html>"""
-    return web.Response(text=html, content_type='text/html')
+    return safe_html_response(html)
 
 @admin_routes.post('/login')
 async def login_post(request):
@@ -369,14 +376,14 @@ async def login_post(request):
         res = web.HTTPFound('/dashboard')
         res.set_cookie('admin_session', session_id, max_age=3600)
         try:
-            btn = [[InlineKeyboardButton("🛑 Disconnect Web Session", callback_data=f"logout_{session_id}")]]
-            await temp.BOT.send_message(chat_id=ADMINS[0], text="✅ **Web Login Detected!**\n\nYour session is active for 1 hour.", reply_markup=InlineKeyboardMarkup(btn))
+            btn = [[InlineKeyboardButton(" Disconnect Web Session", callback_data=f"logout_{session_id}")]]
+            await temp.BOT.send_message(chat_id=ADMINS[0], text=" **Web Login Detected!**\n\nYour session is active for 1 hour.", reply_markup=InlineKeyboardMarkup(btn))
         except: pass
         return res
     html = f"""<!DOCTYPE html><html><head><title>Login</title>{SHARED_HEAD}{THEME_JS}</head><body>
 <div class="theme-corner">
   <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
-    <span class="ti">☀</span><span class="tl">Light</span>
+    <span class="ti">&#9728;</span><span class="tl">Light</span>
   </button>
 </div>
 <div class="login-wrap"><div class="login-box">
@@ -384,23 +391,23 @@ async def login_post(request):
   <div class="login-card">
     <h2>Admin access</h2>
     <p class="sub">Enter credentials to continue</p>
-    <div class="err-box">✕ &nbsp;Wrong credentials. Try again.</div>
+    <div class="err-box">&#10005; &nbsp;Wrong credentials. Try again.</div>
     <form action="/login" method="post">
       <label>Username</label>
       <input type="text" name="user" placeholder="admin" required autocomplete="off">
       <label>Password</label>
       <input type="password" name="pass" placeholder="••••••••" required>
-      <button class="submit-btn" type="submit">Sign in →</button>
+      <button class="submit-btn" type="submit">Sign in &#8594;</button>
     </form>
   </div>
 </div></div>
 <script>document.addEventListener('DOMContentLoaded',initThemeBtn);</script>
 </body></html>"""
-    return web.Response(text=html, content_type='text/html')
+    return safe_html_response(html)
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # APIs
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 @admin_routes.get('/api/search')
 async def search_api(request):
     if not is_logged_in(request): return web.json_response({"err": "unauthorized"}, status=401)
@@ -433,9 +440,9 @@ async def delete_file_api(request):
         if res.deleted_count > 0: return web.json_response({"status": "success"})
     return web.json_response({"status": "fail"})
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # DASHBOARD (login required)
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 @admin_routes.get('/dashboard')
 async def admin_dashboard(request):
     if not is_logged_in(request): return web.HTTPFound('/admin')
@@ -447,7 +454,7 @@ async def admin_dashboard(request):
         total_u = await user_db.total_users_count()
     except Exception:
         total_u = 0
-    # db_count_documents() may return int or dict — handle both
+    # db_count_documents() may return int or dict &#8212; handle both
     if isinstance(stats, int):
         stats = {'total': stats, 'primary': stats, 'cloud': 0, 'archive': 0}
     p_count = stats.get('primary', 0)
@@ -508,11 +515,11 @@ async def admin_dashboard(request):
 {SEARCH_JS}
 <script>isAdmin=true;</script>
 </body></html>"""
-    return web.Response(text=html, content_type='text/html')
+    return safe_html_response(html)
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # SEARCH PAGE (login required)
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 @admin_routes.get('/search')
 async def search_page(request):
     if not is_logged_in(request): return web.HTTPFound('/admin')
@@ -528,8 +535,8 @@ async def search_page(request):
       <button class="ftab" data-col="archive" onclick="setCol(this)">Archive</button>
     </div>
     <div class="search-wrap">
-      <span class="s-icon">⌕</span>
-      <input class="search-input" id="q" placeholder="Movie name, series, quality…">
+      <span class="s-icon">&#8981;</span>
+      <input class="search-input" id="q" placeholder="Movie name, series, quality&#8230;">
     </div>
     <button class="search-btn" onclick="doSearch(0)">Search</button>
   </div>
@@ -540,12 +547,12 @@ async def search_page(request):
     <span class="results-hint">Click Play to stream</span>
   </div>
   <div id="results">
-    <div class="empty"><div class="empty-icon">◈</div><p>Type a movie or series name above<br>and press Search</p></div>
+    <div class="empty"><div class="empty-icon">&#9672;</div><p>Type a movie or series name above<br>and press Search</p></div>
   </div>
   <div class="pagination" id="pageBox">
-    <button class="pg-btn" id="pBtn" onclick="prev()" disabled>← Previous</button>
+    <button class="pg-btn" id="pBtn" onclick="prev()" disabled>&#8592; Previous</button>
     <span class="pg-info" id="pgInfo">Page 1</span>
-    <button class="pg-btn" id="nBtn" onclick="next()">Next →</button>
+    <button class="pg-btn" id="nBtn" onclick="next()">Next &#8594;</button>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -553,11 +560,11 @@ async def search_page(request):
 {SEARCH_JS}
 <script>isAdmin=false;</script>
 </body></html>"""
-    return web.Response(text=html, content_type='text/html')
+    return safe_html_response(html)
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # LOGOUT
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 @admin_routes.get('/logout')
 async def logout(request):
     session_id = request.cookies.get('admin_session')
