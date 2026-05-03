@@ -163,11 +163,9 @@ async def auto_filter(client, msg, collection_type="all"):
     btn = []
     act_src_short = SRC_TO_SHORT.get(actual_source, "pri")
     
-    # ✅ LOGIC UPDATE: अगर टोटल रिज़ल्ट MAX_BTN (12) या उससे कम हैं, तो Send All दिखाओ
     if total <= MAX_BTN:
         btn.append([InlineKeyboardButton("📤 Send All", callback_data=f"sendall_{msg.from_user.id}_{key}_{act_src_short}")])
     else:
-        # अगर ज़्यादा हैं तो नॉर्मल नेविगेशन दिखाओ
         nav = [InlineKeyboardButton(f"📄 1/{total_pages}", callback_data="pages")]
         if next_offset:
             nav.append(InlineKeyboardButton("Next »", callback_data=f"nav_{msg.from_user.id}_{key}_{next_offset}_{act_src_short}"))
@@ -198,7 +196,7 @@ async def auto_delete_msg(bot_msg, user_msg):
     except: pass
 
 # ─────────────────────────────────────────────
-# 📤 SEND ALL HANDLER
+# 📤 SEND ALL HANDLER (अब फाइल्स भेजेगा)
 # ─────────────────────────────────────────────
 @Client.on_callback_query(filters.regex(r"^sendall_"))
 async def send_all_handler(client, query):
@@ -216,24 +214,35 @@ async def send_all_handler(client, query):
     if not files:
         return await query.answer("❌ Search Expired! Search again.", show_alert=True)
 
-    await query.answer("📤 Sending all files...", show_alert=False)
+    await query.answer("📤 Sending files to your PM...", show_alert=False)
 
-    # फाइल्स को यूज़र के PM (इनबॉक्स) में भेजें
     try:
-        await client.send_message(query.from_user.id, f"<b>📥 All Results for your search:</b>")
+        await client.send_message(query.from_user.id, f"<b>📥 All files for your search:</b>")
         for file in files:
-            f_link = f"https://t.me/{temp.U_NAME}?start=file_{query.message.chat.id}_{file['_id']}"
-            await client.send_message(
-                query.from_user.id,
-                f"📁 <a href='{f_link}'>[{get_size(file['file_size'])}] {file['file_name']}</a>",
+            # असली File ID निकालना
+            target_id = file.get("file_ref") or file.get("file_id")
+            if not target_id or str(target_id).strip() == 'None':
+                continue
+            
+            # फाइल का नाम और साइज कैप्शप के लिए
+            caption = f"<b>{file.get('file_name', 'File')}</b>\n\n💾 Size: {get_size(file.get('file_size', 0))}"
+            
+            # सीधे यूज़र के इनबॉक्स में फाइल भेजना
+            await client.send_cached_media(
+                chat_id=query.from_user.id,
+                file_id=target_id,
+                caption=caption
+            )
+            # फ्लडवेट एरर (Spam) से बचने के लिए 0.5 सेकंड का गैप
+            await asyncio.sleep(0.5) 
+            
+    except Exception as e:
+        if "USER_IS_BLOCKED" in str(e) or "PEER_ID_INVALID" in str(e):
+            await query.message.reply(
+                f"❌ <a href='tg://user?id={query.from_user.id}'>User</a>, please start me in PM first to receive files!\n\n👉 t.me/{getattr(temp, 'U_NAME', 'bot')}?start=start", 
                 disable_web_page_preview=True
             )
-            await asyncio.sleep(0.3) # टेलीग्राम स्पैम लिमिट से बचने के लिए थोड़ा गैप
-    except Exception as e:
-        if "USER_IS_BLOCKED" in str(e):
-            await query.message.reply("❌ Please start me in PM first to receive files!")
         print(f"Send All Error: {e}")
-
 
 # ─────────────────────────────────────────────
 # 🔁 NAVIGATION HANDLER
@@ -357,7 +366,6 @@ async def coll_handler(client, query):
     btn = []
     act_src_short = SRC_TO_SHORT.get(act_src, "pri")
 
-    # ✅ LOGIC UPDATE: Collection बदलते वक्त भी चेक करो कि Send All दिखाना है या नहीं
     if total <= MAX_BTN:
         btn.append([InlineKeyboardButton("📤 Send All", callback_data=f"sendall_{req}_{key}_{act_src_short}")])
     else:
