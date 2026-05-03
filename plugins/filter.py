@@ -5,7 +5,7 @@ import random
 from hydrogram import Client, filters, enums
 from hydrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from info import ADMINS, DELETE_TIME, MAX_BTN, IS_PREMIUM, PICS
+from info import ADMINS, DELETE_TIME, MAX_BTN, IS_PREMIUM, PICS, IS_STREAM
 from utils import is_premium, get_size, is_check_admin, temp, get_settings, save_group_settings
 from database.ia_filterdb import get_search_results
 
@@ -196,7 +196,7 @@ async def auto_delete_msg(bot_msg, user_msg):
     except: pass
 
 # ─────────────────────────────────────────────
-# 📤 SEND ALL HANDLER (अब फाइल्स भेजेगा)
+# 📤 SEND ALL HANDLER (With Stream Buttons)
 # ─────────────────────────────────────────────
 @Client.on_callback_query(filters.regex(r"^sendall_"))
 async def send_all_handler(client, query):
@@ -219,21 +219,25 @@ async def send_all_handler(client, query):
     try:
         await client.send_message(query.from_user.id, f"<b>📥 All files for your search:</b>")
         for file in files:
-            # असली File ID निकालना
             target_id = file.get("file_ref") or file.get("file_id")
             if not target_id or str(target_id).strip() == 'None':
                 continue
             
-            # फाइल का नाम और साइज कैप्शप के लिए
-            caption = f"<b>{file.get('file_name', 'File')}</b>\n\n💾 Size: {get_size(file.get('file_size', 0))}"
+            cap_template = '{file_name}\n\n💾 Size: {file_size}'
+            caption = cap_template.replace('{file_name}', str(file.get('file_name', 'File')))\
+                                  .replace('{file_size}', get_size(file.get('file_size', 0)))
             
-            # सीधे यूज़र के इनबॉक्स में फाइल भेजना
+            # ✅ Watch/Download Button Logic
+            btn = [[InlineKeyboardButton('❌ Close', callback_data=f'close_{query.from_user.id}')]]
+            if IS_STREAM:
+                btn.insert(0, [InlineKeyboardButton("▶️ Watch / Download", callback_data=f"stream#{target_id}")])
+            
             await client.send_cached_media(
                 chat_id=query.from_user.id,
                 file_id=target_id,
-                caption=caption
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(btn)
             )
-            # फ्लडवेट एरर (Spam) से बचने के लिए 0.5 सेकंड का गैप
             await asyncio.sleep(0.5) 
             
     except Exception as e:
