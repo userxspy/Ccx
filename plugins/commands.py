@@ -151,27 +151,27 @@ async def start(client, message):
 async def stats(_, message):
     msg = await message.reply("🔄 Fetching Stats...")
     
+    # डेटाबेस से गिनती ला रहे हैं
     files = await db_count_documents()
     users = await db.total_users_count()
     chats = await db.total_chat_count()
-    
     premium = await db.premium.count_documents({"status.premium": True})
+    uptime = get_readable_time(time_now() - temp.START_TIME)
 
-    text = f"""
-📊 <b>Bot Statistics</b>
-
-👥 <b>Users:</b> `{users}`
-👥 <b>Groups:</b> `{chats}`
-💎 <b>Premium:</b> `{premium}`
-
-📁 <b>Files:</b> `{files['total']}`
- • Primary: `{files['primary']}`
- • Cloud: `{files['cloud']}`
- • Archive: `{files['archive']}`
-
-⏱ <b>Uptime:</b> `{get_readable_time(time_now() - temp.START_TIME)}`
-"""
+    # ✅ FIX: अब यह सीधे Script.py के STATUS_TXT का इस्तेमाल करेगा
+    text = script.STATUS_TXT.format(
+        users, 
+        chats, 
+        premium, 
+        files['total'], 
+        files['primary'], 
+        files['cloud'], 
+        files['archive'], 
+        uptime
+    )
+    
     await msg.edit(text)
+
 
 # ─────────────────────────
 # /delete COMMAND
