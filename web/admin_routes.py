@@ -4,7 +4,7 @@ import uuid
 from info import ADMIN_USERNAME, ADMIN_PASSWORD, ADMINS
 from utils import temp, get_size
 from database.users_chats_db import db as user_db
-from database.ia_filterdb import db_count_documents, get_search_results, COLLECTIONS
+from database.ia_filterdb import db_count_documents, COLLECTIONS
 from hydrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 admin_routes = web.RouteTableDef()
@@ -408,17 +408,8 @@ async def login_post(request):
 # ---------------------------------------------
 # APIs
 # ---------------------------------------------
-@admin_routes.get('/api/search')
-async def search_api(request):
-    if not is_logged_in(request): return web.json_response({"err": "unauthorized"}, status=401)
-    q = request.rel_url.query.get('q', '')
-    offset = int(request.rel_url.query.get('offset', 0))
-    col = request.rel_url.query.get('col', 'all')
-    files, next_offset, total = await get_search_results(q, offset=offset, filter_col=col)
-    results = []
-    for f in files:
-        results.append({"id": str(f["_id"]), "name": f.get("file_name","Unknown"), "size": get_size(f.get("file_size",0)), "type": f.get("file_type","file").upper(), "source": f.get("_collection","primary"), "watch": f"/watch?file_id={f['_id']}&token={f.get('token','')}"})
-    return web.json_response({"results": results, "total": total, "next_offset": next_offset})
+# NOTE: /api/search is handled by search_api.py (search_routes)
+# यहाँ सिर्फ edit और delete हैं
 
 @admin_routes.post('/api/edit_file')
 async def edit_file_api(request):
