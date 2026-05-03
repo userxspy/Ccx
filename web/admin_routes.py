@@ -242,37 +242,53 @@ function setCol(el){
   document.querySelectorAll('.ftab').forEach(function(t){t.classList.remove('active')});
   el.classList.add('active');curCol=el.dataset.col;
 }
+function getFid(f){
+  /* f.id अगर API दे तो use करो, नहीं तो watch URL से निकालो (पुराना तरीका) */
+  if(f.id) return f.id;
+  try{ return f.watch.split('file_id=')[1].split('&')[0]; }catch(e){ return ''; }
+}
+function srcClass(src){
+  /* source badge CSS class — lowercase match करना है */
+  if(!src) return 'primary';
+  var s=src.toLowerCase();
+  if(s==='primary'||s==='cloud'||s==='archive') return s;
+  return 'primary';
+}
 async function doSearch(off){
   var q=document.getElementById('q').value.trim();
   if(!q){showToast('Search term daalen','error');return;}
   curQ=q;curOff=off;if(off===0)curPage=1;
   var res=await fetch('/api/search?q='+encodeURIComponent(q)+'&offset='+off+'&col='+curCol);
+  if(!res.ok){showToast('API Error: '+res.status,'error');return;}
   var data=await res.json();
+  if(data.error){showToast(data.error,'error');return;}
   document.getElementById('resInfo').style.display='flex';
   document.getElementById('resCount').textContent=data.total.toLocaleString()+' result'+(data.total!==1?'s':'')+' \u2014 "'+q+'"';
-  if(!data.results.length){
+  if(!data.results||!data.results.length){
     document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">\u25c8</div><p>No files found in <b>'+curCol+'</b> for \u201c'+q+'\u201d</p></div>';
     document.getElementById('pageBox').style.display='none';return;
   }
   var html='';
   data.results.forEach(function(f,i){
+    var fid=getFid(f);
+    var sc=srcClass(f.source);
     var d=(i*.04)+'s';
     if(isAdmin){
-      html+='<div class="file-card" id="row-'+f.id+'" style="animation-delay:'+d+'">'+
-        '<div><div class="fc-top"><span class="source-badge '+f.source+'">'+f.source.toUpperCase()+'</span><span class="type-tag">'+f.type+'</span></div>'+
+      html+='<div class="file-card" id="row-'+fid+'" style="animation-delay:'+d+'">'+
+        '<div><div class="fc-top"><span class="source-badge '+sc+'">'+sc.toUpperCase()+'</span><span class="type-tag">'+f.type+'</span></div>'+
         '<div class="fc-name">'+f.name+'</div>'+
-        '<div class="fc-meta"><span>\ud83d\udcbe '+f.size+'</span><span>ID: '+f.id.slice(0,12)+'\u2026</span></div></div>'+
+        '<div class="fc-meta"><span>&#128190; '+f.size+'</span></div></div>'+
         '<div class="fc-actions">'+
-        '<a href="'+f.watch+'" target="_blank" class="btn-play">\u25b6 Play</a>'+
-        '<button class="btn-edit" onclick="openEdit(\''+f.id+'\',\''+f.name.replace(/\'/g,"\\'")+'\')">\u270e Edit</button>'+
-        '<button class="btn-del" onclick="deleteFile(\''+f.id+'\')">\u2715 Delete</button>'+
+        '<a href="'+f.watch+'" target="_blank" class="btn-play">&#9654; Play</a>'+
+        '<button class="btn-edit" onclick="openEdit(\''+fid+'\',\''+f.name.replace(/\'/g,"\\'").replace(/"/g,'&quot;')+'\')"">&#9998; Edit</button>'+
+        '<button class="btn-del" onclick="deleteFile(\''+fid+'\')">&#10005; Delete</button>'+
         '</div></div>';
     } else {
       html+='<div class="file-card" style="animation-delay:'+d+'">'+
-        '<div><div class="fc-top"><span class="source-badge '+f.source+'">'+f.source.toUpperCase()+'</span><span class="type-tag">'+f.type+'</span></div>'+
+        '<div><div class="fc-top"><span class="source-badge '+sc+'">'+sc.toUpperCase()+'</span><span class="type-tag">'+f.type+'</span></div>'+
         '<div class="fc-name">'+f.name+'</div>'+
-        '<div class="fc-meta"><span>\ud83d\udcbe '+f.size+'</span></div></div>'+
-        '<div class="fc-actions pub"><a href="'+f.watch+'" target="_blank" class="btn-play">\u25b6 Play</a></div>'+
+        '<div class="fc-meta"><span>&#128190; '+f.size+'</span></div></div>'+
+        '<div class="fc-actions pub"><a href="'+f.watch+'" target="_blank" class="btn-play">&#9654; Play</a></div>'+
         '</div>';
     }
   });
