@@ -8,6 +8,10 @@ from Script import script
 
 VERIFY_CACHE = {}
 
+# ✅ एडमिन के लिए कॉमन मैसेज (DRY Principle)
+ADMIN_MSG = "👑 **You are the Admin!**\nYou have Lifetime Premium access."
+ADMIN_ALERT = "👑 You are the Admin! You have Lifetime Premium access."
+
 # =========================
 # 🔧 HELPERS
 # =========================
@@ -71,7 +75,6 @@ async def check_premium_expired(bot):
                     await db.update_plan(uid, {"expire": "", "plan": "", "premium": False, "reminded_12h": False, "reminded_6h": False, "reminded_3h": False, "reminded_1h": False, "reminded_30m": False, "reminded_10m": False, "last_reminder_id": 0})
                     continue
 
-                # Interval Checker Loop
                 for min_t, max_t, flag, text in intervals:
                     if min_t <= left_mins <= max_t and not mp.get(flag):
                         if mp.get("last_reminder_id"): await safe_del(bot, uid, [mp.get("last_reminder_id")])
@@ -90,8 +93,7 @@ async def check_premium_expired(bot):
 @Client.on_message(filters.command("myplan") & filters.private)
 async def myplan_cmd(c, m):
     if not IS_PREMIUM: return
-    if m.from_user.id in ADMINS:
-        return await m.reply("👑 **You are the Admin!**\nYou have Lifetime Premium access.", quote=True)
+    if m.from_user.id in ADMINS: return await m.reply(ADMIN_MSG, quote=True)
         
     mp = await db.get_plan(m.from_user.id)
     if not mp.get("premium"):
@@ -104,9 +106,7 @@ async def myplan_cmd(c, m):
 @Client.on_message(filters.command("plan") & filters.private)
 async def plan_cmd(c, m):
     if not IS_PREMIUM: return
-    # ✅ FIX: Admin `/plan` check
-    if m.from_user.id in ADMINS:
-        return await m.reply("👑 **You are the Admin!**\nYou already have Lifetime Premium access. No need to buy any plan.", quote=True)
+    if m.from_user.id in ADMINS: return await m.reply(ADMIN_MSG, quote=True)
         
     await m.reply(script.PLAN_TXT.format(PRE_DAY_AMOUNT, RECEIPT_SEND_USERNAME), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💎 Activate Premium", callback_data="buy_prem")]]))
 
@@ -148,8 +148,7 @@ async def prm_list(c, m):
 # =========================
 @Client.on_callback_query(filters.regex("^myplan$"))
 async def myplan_cb(client, query):
-    if query.from_user.id in ADMINS:
-        return await query.answer("👑 You are the Owner/Admin! You have Lifetime Premium.", show_alert=True)
+    if query.from_user.id in ADMINS: return await query.answer(ADMIN_ALERT, show_alert=True)
 
     if not IS_PREMIUM: return await query.answer("Premium disabled.", show_alert=True)
     mp = await db.get_plan(query.from_user.id)
@@ -165,9 +164,7 @@ async def myplan_cb(client, query):
 
 @Client.on_callback_query(filters.regex(r"^(buy_prem|activate_plan)$"))
 async def buy_callback(c, q):
-    # ✅ FIX: Admin Callback Button Check
-    if q.from_user.id in ADMINS:
-        return await q.answer("👑 You are the Admin! You don't need to buy premium.", show_alert=True)
+    if q.from_user.id in ADMINS: return await q.answer(ADMIN_ALERT, show_alert=True)
 
     prm_msg = await q.message.edit(f"💎 **Select Plan Duration**\n\nSend days (e.g. `30`).\nPrice: ₹{PRE_DAY_AMOUNT}/day\n\n⏳ Timeout: 60s")
     try:
@@ -176,7 +173,6 @@ async def buy_callback(c, q):
         days = int(resp.text)
         amount = days * int(PRE_DAY_AMOUNT)
         
-        # QR Memory Generation
         img = qrcode.make(f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR")
         bio = io.BytesIO()
         img.save(bio, format="PNG")
