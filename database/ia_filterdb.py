@@ -14,7 +14,7 @@ db = AsyncIOMotorClient(
     connectTimeoutMS=10000, socketTimeoutMS=20000, retryWrites=True, retryReads=True
 )[DATABASE_NAME]
 
-COLS = {"primary": db.Primary, "cloud": db.Cloud, "archive": db.Archive}
+COLLECTIONS = {"primary": db.Primary, "cloud": db.Cloud, "archive": db.Archive}
 
 async def ensure_indexes():
     for n, c in COLS.items():
