@@ -1,331 +1,139 @@
-import logging
-import re
-import base64
-import asyncio
+import logging, re, base64, asyncio
 from struct import pack
-import motor.motor_asyncio
+from motor.motor_asyncio import AsyncIOMotorClient
 from hydrogram.file_id import FileId
 from info import DATABASE_URL, DATABASE_NAME, MAX_BTN, USE_CAPTION_FILTER
 
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────
-# ⚙️ MOTOR CONNECTION — Koyeb Free Tier Optimized
+# ⚙️ DB SETUP & COLLECTIONS (Optimized)
 # ─────────────────────────────────────────────────────────
-client = motor.motor_asyncio.AsyncIOMotorClient(
-    DATABASE_URL,
-    maxPoolSize=5,
-    minPoolSize=1,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=10000,
-    socketTimeoutMS=20000,
-    retryWrites=True,
-    retryReads=True,
-)
-db = client[DATABASE_NAME]
+db = AsyncIOMotorClient(
+    DATABASE_URL, maxPoolSize=5, minPoolSize=1, serverSelectionTimeoutMS=5000, 
+    connectTimeoutMS=10000, socketTimeoutMS=20000, retryWrites=True, retryReads=True
+)[DATABASE_NAME]
 
-primary = db["Primary"]
-cloud   = db["Cloud"]
-archive = db["Archive"]
+COLS = {"primary": db.Primary, "cloud": db.Cloud, "archive": db.Archive}
 
-COLLECTIONS = {
-    "primary": primary,
-    "cloud":   cloud,
-    "archive": archive,
-}
-
-# ─────────────────────────────────────────────────────────
-# ⚡ INDEXES — Text index (Superfast searching के लिए)
-# ─────────────────────────────────────────────────────────
 async def ensure_indexes():
-    for name, col in COLLECTIONS.items():
-        try:
-            await col.create_index(
-                [("file_name", "text"), ("caption", "text")],
-                name=f"{name}_text"
-            )
-            logger.info(f"✅ Text Index OK: {name}")
+    for n, c in COLS.items():
+        try: await c.create_index([("file_name", "text"), ("caption", "text")], name=f"{n}_text")
         except Exception as e:
-            if "already exists" in str(e) or "IndexKeySpecsConflict" in str(e) or "86" in str(e):
-                pass
-            else:
-                logger.warning(f"Index warning [{name}]: {e}")
+            if not any(x in str(e) for x in ["already exists", "IndexKeySpecsConflict", "86"]):
+                logger.warning(f"Idx err [{n}]: {e}")
 
-# ─────────────────────────────────────────────────────────
-# 📊 DB STATS
-# ─────────────────────────────────────────────────────────
 async def db_count_documents():
     try:
-        p, c, a = await asyncio.gather(
-            primary.estimated_document_count(),
-            cloud.estimated_document_count(),
-            archive.estimated_document_count(),
-        )
+        p, c, a = await asyncio.gather(*(COLS[k].estimated_document_count() for k in ["primary", "cloud", "archive"]))
         return {"primary": p, "cloud": c, "archive": a, "total": p + c + a}
-    except Exception as e:
-        logger.error(f"Count error: {e}")
-        return {"primary": 0, "cloud": 0, "archive": 0, "total": 0}
+    except: return {"primary": 0, "cloud": 0, "archive": 0, "total": 0}
 
 # ─────────────────────────────────────────────────────────
-# 💾 SAVE FILE
+# 💾 SAVE & UTILS
 # ─────────────────────────────────────────────────────────
-async def save_file(media, collection_type="primary"):
+async def save_file(media, col_type="primary"):
     try:
-        file_id = unpack_new_file_id(media.file_id)
-        if not file_id:
-            logger.warning(f"Could not unpack file_id: {media.file_name}")
-            return "err"
-
-        f_name  = re.sub(r"@\w+|(_|\-|\.|\+)", " ", str(media.file_name or "")).strip()
-        caption = re.sub(r"@\w+|(_|\-|\.|\+)", " ", str(media.caption  or "")).strip()
-
-        file_type = type(media).__name__.lower()
-
-        doc = {
-            "_id":       file_id,     
-            "file_ref":  media.file_id, 
-            "file_name": f_name,
-            "file_size": media.file_size,
-            "caption":   caption,
-            "file_type": file_type,   
-        }
-
-        col    = COLLECTIONS.get(collection_type, primary)
-        result = await col.replace_one({"_id": file_id}, doc, upsert=True)
-
-        if result.matched_count > 0:
-            logger.warning(f"Already Saved - {f_name}")
-            return "dup"
-        else:
-            logger.info(f"Saved - {f_name}")
-            return "suc"
-
-    except Exception as e:
-        logger.error(f"save_file error: {e}")
-        return "err"
-
-# ─────────────────────────────────────────────────────────
-# 🔍 REGEX BUILDER (Fallback के लिए)
-# ─────────────────────────────────────────────────────────
-def _build_regex(query: str):
-    query = query.strip()
-    if not query:
-        raw = r'.'
-    elif ' ' not in query:
-        raw = r'(\b|[\.\+\-_])' + re.escape(query) + r'(\b|[\.\+\-_])'
-    else:
-        raw = re.escape(query).replace(r'\ ', r'.*[\s\.\+\-_]')
-
-    try:
-        return re.compile(raw, flags=re.IGNORECASE)
-    except Exception:
-        return re.compile(re.escape(query), flags=re.IGNORECASE)
-
-# ─────────────────────────────────────────────────────────
-# 🚀 SMART SEARCH (HYBRID: TEXT INDEX + REGEX) -> STRICT AND LOGIC
-# ─────────────────────────────────────────────────────────
-async def _search(col, raw_query: str, regex, offset: int, limit: int, lang=None):
-    
-    # 1. ⚡ सुपरफास्ट Text Search (Strict AND Logic)
-    # हर शब्द को Quotes (") में डाल रहे हैं ताकि सटीक मैच ही मिले
-    clean_query = raw_query.replace('"', '').replace("'", "")
-    strict_query = " ".join(f'"{word}"' for word in clean_query.split())
-
-    text_flt = {"$text": {"$search": strict_query}}
-    if lang:
-        lang_regex = re.compile(lang, re.IGNORECASE)
-        text_flt = {"$and": [text_flt, {"file_name": lang_regex}]}
-
-    count = await col.count_documents(text_flt)
-    
-    if count > 0:
-        # अगर इंडेक्स से रिज़ल्ट मिला, तो सबसे अच्छी मैचिंग (Relevance Score) को ऊपर रखो
-        async def _fetch_text():
-            cursor = col.find(text_flt, {"score": {"$meta": "textScore"}})
-            cursor.sort([("score", {"$meta": "textScore"})])
-            cursor.skip(offset).limit(limit)
-            docs = await cursor.to_list(length=limit)
-            for doc in docs:
-                doc["file_id"] = doc["_id"]
-            return docs
-        return await _fetch_text(), count
-
-    # 2. 🐢 Fallback to Regex (अगर यूज़र ने आधा शब्द लिखा हो, जैसे "Aveng")
-    if USE_CAPTION_FILTER:
-        reg_flt = {"$or": [{"file_name": regex}, {"caption": regex}]}
-    else:
-        reg_flt = {"file_name": regex}
-
-    if lang:
-        lang_regex = re.compile(lang, re.IGNORECASE)
-        reg_flt = {"$and": [reg_flt, {"file_name": lang_regex}]}
-
-    async def _fetch_reg():
-        cursor = col.find(reg_flt).sort('_id', -1)
-        cursor.skip(offset).limit(limit)
-        docs = await cursor.to_list(length=limit)
-        for doc in docs:
-            doc["file_id"] = doc["_id"]
-        return docs
-
-    count = await col.count_documents(reg_flt)
-    docs = await _fetch_reg()
-    return docs, count
-
-# ─────────────────────────────────────────────────────────
-# 🌐 PUBLIC SEARCH API
-# ─────────────────────────────────────────────────────────
-async def get_search_results(query, max_results=MAX_BTN, offset=0, lang=None, collection_type="primary"):
-    if not query:
-        return [], "", 0, collection_type
-
-    raw_query  = str(query).strip()
-    regex      = _build_regex(raw_query)
-    results    = []
-    total      = 0
-    actual_src = collection_type
-
-    # ── CASCADE: Primary → Cloud → Archive ──
-    if collection_type == "all":
-        cascade = [("primary", primary), ("cloud", cloud), ("archive", archive)]
-        for src, col in cascade:
-            docs, cnt = await _search(col, raw_query, regex, offset, max_results, lang)
-            if docs:
-                results    = docs
-                total      = cnt
-                actual_src = src
-                break  
-
-    # ── Single collection ──
-    elif collection_type in COLLECTIONS:
-        col       = COLLECTIONS[collection_type]
-        docs, cnt = await _search(col, raw_query, regex, offset, max_results, lang)
-        results   = docs
-        total     = cnt
-
-    # ── Unknown → Primary default ──
-    else:
-        docs, cnt = await _search(primary, raw_query, regex, offset, max_results, lang)
-        results   = docs
-        total     = cnt
-
-    next_offset = offset + max_results
-    next_offset = "" if next_offset >= total else next_offset
-
-    return results, next_offset, total, actual_src
-
-# ─────────────────────────────────────────────────────────
-# 💻 WEB API SEARCH (For Web Dashboard)
-# ─────────────────────────────────────────────────────────
-async def get_web_search_results(query, offset=0, limit=20):
-    if not query:
-        return []
+        fid = unpack_new_file_id(media.file_id)
+        if not fid: return "err"
         
-    raw_query = str(query).strip()
-    
-    # ✅ यहाँ भी Strict AND Logic लगा दिया
-    clean_query = raw_query.replace('"', '').replace("'", "")
-    strict_query = " ".join(f'"{word}"' for word in clean_query.split())
-    
-    regex = _build_regex(raw_query)
-    text_flt = {"$text": {"$search": strict_query}}
-    reg_flt = {"file_name": regex}
-    
-    results = []
-    try:
-        for col in [primary, cloud, archive]:
-            count = await col.count_documents(text_flt)
-            
-            if count > 0:
-                cursor = col.find(text_flt, {"score": {"$meta": "textScore"}}).sort([("score", {"$meta": "textScore"})])
-            else:
-                cursor = col.find(reg_flt).sort('_id', -1)
-                
-            cursor.skip(offset).limit(limit)
-            docs = await cursor.to_list(length=limit)
-            for doc in docs:
-                doc["file_id"] = doc["_id"]
-                results.append(doc)
-                
-            if len(results) >= limit:
-                break
-                
-        return results[:limit]
+        clean = lambda s: re.sub(r"@\w+|[_+.-]", " ", str(s or "")).strip()
+        doc = {
+            "_id": fid, "file_ref": media.file_id, "file_name": clean(media.file_name), 
+            "file_size": media.file_size, "caption": clean(media.caption), "file_type": type(media).__name__.lower()
+        }
+        res = await COLS.get(col_type, COLS["primary"]).replace_one({"_id": fid}, doc, upsert=True)
+        return "dup" if res.matched_count > 0 else "suc"
     except Exception as e:
-        logger.error(f"Web Search Error: {e}")
-        return []
+        logger.error(f"save_file err: {e}"); return "err"
+
+def _build_regex(q: str):
+    q = q.strip()
+    raw = r'.' if not q else (r'(\b|[\.\+\-_])' + re.escape(q) + r'(\b|[\.\+\-_])' if ' ' not in q else re.escape(q).replace(r'\ ', r'.*[\s\.\+\-_]'))
+    try: return re.compile(raw, re.IGNORECASE)
+    except: return re.compile(re.escape(q), re.IGNORECASE)
 
 # ─────────────────────────────────────────────────────────
-# 🗑 DELETE FILES
+# 🚀 SMART HYBRID SEARCH
 # ─────────────────────────────────────────────────────────
-async def delete_files(query, collection_type="all"):
-    deleted = 0
+async def _search(col, q: str, regex, off: int, lim: int, lang=None):
+    sq = " ".join(f'"{w}"' for w in q.replace('"', '').replace("'", "").split())
+    t_flt = {"$text": {"$search": sq}}
+    if lang: t_flt = {"$and": [t_flt, {"file_name": re.compile(lang, re.IGNORECASE)}]}
+    
+    cnt = await col.count_documents(t_flt)
+    if cnt > 0:
+        docs = await col.find(t_flt, {"score": {"$meta": "textScore"}}).sort([("score", {"$meta": "textScore"})]).skip(off).limit(lim).to_list(lim)
+        for d in docs: d["file_id"] = d["_id"]
+        return docs, cnt
+
+    r_flt = {"$or": [{"file_name": regex}, {"caption": regex}]} if USE_CAPTION_FILTER else {"file_name": regex}
+    if lang: r_flt = {"$and": [r_flt, {"file_name": re.compile(lang, re.IGNORECASE)}]}
+    
+    cnt = await col.count_documents(r_flt)
+    docs = await col.find(r_flt).sort('_id', -1).skip(off).limit(lim).to_list(lim)
+    for d in docs: d["file_id"] = d["_id"]
+    return docs, cnt
+
+async def get_search_results(q, lim=MAX_BTN, off=0, lang=None, col_type="primary"):
+    if not q: return [], "", 0, col_type
+    rq, reg = str(q).strip(), _build_regex(str(q).strip())
+    
+    targets = [("primary", COLS["primary"]), ("cloud", COLS["cloud"]), ("archive", COLS["archive"])] if col_type == "all" else [(col_type, COLS.get(col_type, COLS["primary"]))]
+    
+    for name, col in targets:
+        docs, cnt = await _search(col, rq, reg, off, lim, lang)
+        if docs or name == targets[-1][0]: 
+            nxt = off + lim if off + lim < cnt else ""
+            return docs, nxt, cnt, name
+
+async def get_web_search_results(q, off=0, lim=20):
+    if not q: return []
+    rq = str(q).strip()
+    sq = " ".join(f'"{w}"' for w in rq.replace('"', '').replace("'", "").split())
+    reg, t_flt, r_flt = _build_regex(rq), {"$text": {"$search": sq}}, {"file_name": _build_regex(rq)}
+    
+    res = []
+    for col in COLS.values():
+        cur = col.find(t_flt, {"score": {"$meta": "textScore"}}).sort([("score", {"$meta": "textScore"})]) if await col.count_documents(t_flt) > 0 else col.find(r_flt).sort('_id', -1)
+        docs = await cur.skip(off).limit(lim).to_list(lim)
+        for d in docs: 
+            d["file_id"] = d["_id"]
+            res.append(d)
+        if len(res) >= lim: break
+    return res[:lim]
+
+# ─────────────────────────────────────────────────────────
+# 🗑 DELETE & DETAILS
+# ─────────────────────────────────────────────────────────
+async def delete_files(q, col_type="all"):
+    cols = COLS.values() if col_type == "all" else [COLS.get(col_type, COLS["primary"])]
     try:
-        if query == "*":
-            cols    = [col for name, col in COLLECTIONS.items()
-                       if collection_type == "all" or name == collection_type]
-            results = await asyncio.gather(*[col.delete_many({}) for col in cols])
-            return sum(r.deleted_count for r in results)
-
-        regex = _build_regex(str(query))
-        flt   = {"file_name": regex}
-        cols  = [(name, col) for name, col in COLLECTIONS.items()
-                 if collection_type == "all" or name == collection_type]
-
-        results = await asyncio.gather(*[col.delete_many(flt) for _, col in cols])
-        for (name, _), res in zip(cols, results):
-            deleted += res.deleted_count
-            if res.deleted_count:
-                logger.info(f"🗑 Deleted {res.deleted_count} from {name}")
-
-        return deleted
-
+        flt = {} if q == "*" else {"file_name": _build_regex(str(q))}
+        return sum((r.deleted_count for r in await asyncio.gather(*(c.delete_many(flt) for c in cols))))
     except Exception as e:
-        logger.error(f"delete_files error: {e}")
-        return deleted
+        logger.error(f"del err: {e}"); return 0
+
+async def get_file_details(fid):
+    for col in COLS.values():
+        if (doc := await col.find_one({"_id": fid})):
+            doc["file_id"] = doc["_id"]; return doc
+    return None
 
 # ─────────────────────────────────────────────────────────
-# 📂 GET FILE DETAILS
-# ─────────────────────────────────────────────────────────
-async def get_file_details(file_id):
-    try:
-        for col in [primary, cloud, archive]:
-            doc = await col.find_one({"_id": file_id})
-            if doc:
-                doc["file_id"] = doc["_id"]  
-                return doc
-        return None
-    except Exception as e:
-        logger.error(f"get_file_details error: {e}")
-        return None
-
-# ─────────────────────────────────────────────────────────
-# 🔑 FILE ID ENCODING UTILS
+# 🔑 ENCODING UTILS
 # ─────────────────────────────────────────────────────────
 def encode_file_id(s: bytes) -> str:
     r, n = b"", 0
-    for i in s + bytes([22]) + bytes([4]):
-        if i == 0:
-            n += 1
+    for i in s + b"\x16\x04":
+        if i == 0: n += 1
         else:
-            if n:
-                r += b"\x00" + bytes([n])
-                n  = 0
+            if n: r += b"\x00" + bytes([n]); n = 0
             r += bytes([i])
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
-def unpack_new_file_id(new_file_id: str):
+def unpack_new_file_id(new_id: str):
     try:
-        decoded = FileId.decode(new_file_id)
-        return encode_file_id(
-            pack(
-                "<iiqq",
-                int(decoded.file_type),
-                decoded.dc_id,
-                decoded.media_id,
-                decoded.access_hash,
-            )
-        )
-    except Exception as e:
-        logger.error(f"unpack_new_file_id error: {e}")
-        return None
+        d = FileId.decode(new_id)
+        return encode_file_id(pack("<iiqq", int(d.file_type), d.dc_id, d.media_id, d.access_hash))
+    except: return None
