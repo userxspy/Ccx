@@ -8,6 +8,7 @@ from hydrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from info import ADMINS, DELETE_TIME, MAX_BTN, IS_PREMIUM, PICS, IS_STREAM
 from utils import is_premium, get_size, is_check_admin, temp, get_settings, save_group_settings
 from database.ia_filterdb import get_search_results
+from Script import script  # ✅ Script इम्पोर्ट किया गया
 
 BUTTONS = {}
 SRC_TO_SHORT = {"primary": "pri", "cloud": "cld", "archive": "arc"}
@@ -27,7 +28,7 @@ async def is_valid_search(message):
     return True
 
 # ─────────────────────────────────────────────
-# 🎨 UI HELPER FUNCTION (इससे 100 लाइन कोड बच गया!)
+# 🎨 UI HELPER FUNCTION
 # ─────────────────────────────────────────────
 def get_filter_ui(search, files, total, act_src, offset, chat_id, req_id, key, next_off):
     list_items = [
@@ -125,7 +126,8 @@ async def auto_filter(client, msg, collection_type="all"):
 
     if not files:
         try:
-            m = await msg.reply(f"❌ No results for <b>{search}</b>", quote=True)
+            # ✅ प्रोफेशनल: NOT_FILE_TXT को Script.py से लिया गया 
+            m = await msg.reply(script.NOT_FILE_TXT.format(msg.from_user.mention, search), quote=True)
             await asyncio.sleep(5)
             await m.delete()
         except: pass
@@ -171,7 +173,9 @@ async def send_all_handler(client, query):
             target_id = file.get("file_ref") or file.get("file_id")
             if not target_id or str(target_id).strip() == 'None': continue
             
-            cap = f"{file.get('file_name', 'File')}\n\n💾 Size: {get_size(file.get('file_size', 0))}"
+            # ✅ प्रोफेशनल: FILE_CAPTION को Script.py से लिया गया 
+            cap = script.FILE_CAPTION.format(file_name=str(file.get('file_name', 'File')), file_size=get_size(file.get('file_size', 0)))
+            
             btn = [[InlineKeyboardButton('❌ Close', callback_data=f'close_{query.from_user.id}')]]
             if IS_STREAM: btn.insert(0, [InlineKeyboardButton("▶️ Watch / Download", callback_data=f"stream#{target_id}")])
             
