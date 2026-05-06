@@ -1,487 +1,70 @@
 from aiohttp import web
-import time
-import uuid
+import time, uuid
 from info import ADMIN_USERNAME, ADMIN_PASSWORD, ADMINS
 from utils import temp
 from database.users_chats_db import db as user_db
-from database.ia_filterdb import db_count_documents, COLLECTIONS
-from hydrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from database.ia_filterdb import db_count_documents
+from hydrogram.types import InlineKeyboardMarkup as IKM, InlineKeyboardButton as IKB
 
 admin_routes = web.RouteTableDef()
 
-def safe_html_response(html: str) -> web.Response:
-    clean = html.encode('utf-8', errors='replace').decode('utf-8')
-    return web.Response(text=clean, content_type='text/html', charset='utf-8')
+# ----------------- MINIFIED ASSETS -----------------
+CSS = "*{box-sizing:border-box;margin:0;padding:0}:root{--bg:#141414;--bg2:#000;--bg3:#2b2b2b;--bg4:#333;--accent:#e50914;--accent-hover:#b30710;--text:#fff;--muted:#808080;--border:#404040;--card:#181818;--sidebar-w:260px}body.light{--bg:#f3f3f3;--bg2:#fff;--bg3:#e6e6e6;--bg4:#ccc;--text:#141414;--muted:#666;--border:#ccc;--card:#fff}body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:.2s}.topbar{background:var(--bg2);padding:0 4%;display:flex;align-items:center;height:68px;position:sticky;top:0;z-index:100;gap:15px;box-shadow:0 2px 10px rgba(0,0,0,.5)}.ham-btn{background:0 0;border:0;cursor:pointer;color:var(--text);display:flex;flex-direction:column;gap:5px;padding:6px}.ham-line{width:22px;height:2px;background:currentColor;transition:.2s}.ham-btn.open .ham-line:nth-child(1){transform:translateY(7px) rotate(45deg)}.ham-btn.open .ham-line:nth-child(2){opacity:0}.ham-btn.open .ham-line:nth-child(3){transform:translateY(-7px) rotate(-45deg)}.logo{font-size:18px;font-weight:900;letter-spacing:1px;color:var(--accent);display:flex;align-items:center;gap:8px;text-decoration:none;flex:1}.nf-icon{background:var(--accent);color:#fff;padding:2px 7px;border-radius:3px;font-size:18px;line-height:1}.theme-btn{margin-left:auto;background:0 0;border:1px solid var(--border);border-radius:4px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--text);cursor:pointer}.theme-btn:hover{background:var(--bg3)}.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:150;opacity:0;pointer-events:none;transition:.2s}.sidebar-overlay.open{opacity:1;pointer-events:all}.sidebar{position:fixed;top:0;left:0;height:100%;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);z-index:160;display:flex;flex-direction:column;transform:translateX(-100%);transition:.3s}.sidebar.open{transform:translateX(0)}.sb-header{padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}.sb-logo{font-size:14px;font-weight:900;color:var(--accent);display:flex;align-items:center;gap:8px}.sb-close{background:0 0;border:0;color:var(--muted);font-size:22px;cursor:pointer}.sb-nav{padding:15px 10px;flex:1}.sb-section{font-size:11px;font-weight:700;color:var(--muted);padding:8px 12px}.sb-link{display:flex;padding:12px 15px;border-radius:4px;text-decoration:none;color:var(--muted);font-size:15px;font-weight:500;margin-bottom:4px}.sb-link.active{background:var(--accent);color:#fff}.sb-footer{padding:15px 10px;border-top:1px solid var(--border)}.sb-logout{display:block;padding:12px;border-radius:4px;text-align:center;text-decoration:none;color:var(--text);font-weight:700;border:1px solid var(--border)}.search-zone{padding:20px 4%;background:var(--bg)}.search-row{display:flex;gap:10px;flex-wrap:wrap}.filter-tabs{display:flex;gap:4px;background:var(--bg2);border:1px solid var(--border);padding:4px;border-radius:4px}.ftab{background:0 0;border:0;padding:8px 16px;font-weight:700;color:var(--muted);cursor:pointer}.ftab.active{background:var(--bg3);color:var(--text)}.search-wrap{flex:1;position:relative;min-width:200px}.s-icon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--muted)}.search-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:12px 15px 12px 42px;color:var(--text);font-size:15px;outline:0}.search-btn{background:var(--accent);color:#fff;border:0;border-radius:4px;padding:12px 24px;font-weight:700;cursor:pointer}.main{padding:0 4% 40px;max-width:1400px;margin:0 auto}.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:30px}.scard{background:var(--card);padding:20px;border-radius:4px;position:relative;box-shadow:0 4px 6px rgba(0,0,0,.3)}.scard::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}.scard.red::after{background:var(--accent)}.scard.white::after{background:#fff}.scard.grey::after{background:#808080}.scard-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px}.scard-val{font-size:32px;font-weight:900;color:var(--text)}.scard-sub{font-size:12px;color:var(--muted)}.results-info{display:none;justify-content:space-between;padding:10px 0 20px;font-weight:700}.file-card{background:var(--card);border-radius:4px;padding:18px;display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:12px;border:1px solid var(--bg3)}.fc-left{flex:1}.fc-top{display:flex;gap:8px;margin-bottom:8px}.source-badge{font-size:10px;font-weight:900;padding:2px 6px;border-radius:2px;border:1px solid}.source-badge.primary{color:var(--accent);border-color:var(--accent)}.source-badge.cloud{color:#fff;border-color:#fff}.source-badge.archive{color:var(--muted);border-color:var(--muted)}.type-tag{font-size:12px;font-weight:700;color:var(--muted)}.fc-name{font-size:16px;font-weight:500;margin-bottom:6px}.fc-meta{font-size:13px;color:var(--muted)}.btn-play{background:#fff;color:#000;padding:10px 24px;border-radius:4px;font-weight:800;text-decoration:none;display:flex;gap:8px}.empty{text-align:center;padding:80px 20px;color:var(--muted)}.empty-icon{font-size:40px;margin-bottom:15px}.pagination{display:none;justify-content:center;gap:15px;padding:30px 0;align-items:center}.pg-btn{background:var(--bg3);border:0;color:var(--text);padding:10px 20px;border-radius:4px;font-weight:700;cursor:pointer}.pg-btn:disabled{opacity:.3}.toast{position:fixed;bottom:20px;right:20px;background:var(--accent);color:#fff;padding:12px 20px;border-radius:4px;font-weight:700;z-index:300;transform:translateX(150%);transition:.3s}.toast.show{transform:translateX(0)}.toast.error{background:#000;border:1px solid var(--accent)}.login-bg{background:linear-gradient(rgba(0,0,0,.8) 0,rgba(0,0,0,.4) 50%,rgba(0,0,0,.8) 100%),url('https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/IN-en-20220502-popsignuptwoweeks-perspective_alpha_website_medium.jpg') center/cover;min-height:100vh;display:flex;flex-direction:column}.login-top{padding:20px 4%}.login-logo-big{font-size:32px;font-weight:900;color:var(--accent);display:flex;gap:8px}.login-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}.login-card{background:rgba(0,0,0,.75);padding:60px;border-radius:4px;width:100%;max-width:450px}.login-card h2{font-size:32px;margin-bottom:28px}.login-card input{width:100%;background:#333;border:0;padding:16px;color:#fff;margin-bottom:16px;border-radius:4px}.login-card .submit-btn{width:100%;background:var(--accent);color:#fff;border:0;padding:16px;font-weight:700;margin-top:24px;border-radius:4px;cursor:pointer}.err-box{background:#e87c03;color:#fff;padding:10px 20px;border-radius:4px;margin-bottom:16px}.big-stat{background:var(--card);padding:40px 20px;border-radius:4px;text-align:center;margin-bottom:30px}.big-stat-val{font-size:64px;font-weight:900;color:var(--accent);margin-bottom:10px}.big-stat-label{font-size:16px;color:var(--muted);font-weight:700;letter-spacing:2px}"
+JS = "(function(){if(localStorage.getItem('theme')==='light')document.body.classList.add('light')})();function toggleTheme(){var l=document.body.classList.toggle('light');localStorage.setItem('theme',l?'light':'dark');}function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('sbOverlay').classList.add('open');document.getElementById('hamBtn').classList.add('open');}function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sbOverlay').classList.remove('open');document.getElementById('hamBtn').classList.remove('open');}var curQ='',curOff=0,nextOff='',curCol='all',curPage=1;function setCol(e){document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('active'));e.classList.add('active');curCol=e.dataset.col;}async function doSearch(o){var q=document.getElementById('q').value.trim();if(!q){showToast('Please enter a movie name','error');return;}curQ=q;curOff=o;if(o===0)curPage=1;try{var r=await fetch(`/api/search?q=${encodeURIComponent(q)}&offset=${o}&col=${curCol}`);if(!r.ok){showToast('Error fetching','error');return;}var d=await r.json();if(d.error){showToast(d.error,'error');return;}document.getElementById('resInfo').style.display='flex';document.getElementById('resCount').innerHTML=`More to explore: <span style=\"color:var(--text)\">${q}</span>`;if(!d.results||!d.results.length){document.getElementById('results').innerHTML=`<div class=\"empty\"><div class=\"empty-icon\">&#9888;</div><p>No titles found for \"${q}\"</p></div>`;document.getElementById('pageBox').style.display='none';return;}var h='';d.results.forEach(f=>{var sc=(f.source||'primary').toLowerCase();if(!['primary','cloud','archive'].includes(sc))sc='primary';h+=`<div class=\"file-card\"><div class=\"fc-left\"><div class=\"fc-top\"><span class=\"source-badge ${sc}\">${sc.toUpperCase()}</span><span class=\"type-tag\">${f.type.toUpperCase()}</span></div><div class=\"fc-name\">${f.name}</div><div class=\"fc-meta\">Size: ${f.size}</div></div><a href=\"${f.watch}\" target=\"_blank\" class=\"btn-play\">&#9654; Play</a></div>`;});document.getElementById('results').innerHTML=h;nextOff=d.next_offset;document.getElementById('pageBox').style.display='flex';document.getElementById('pBtn').disabled=(o===0);document.getElementById('nBtn').disabled=!nextOff;document.getElementById('pgInfo').textContent='Page '+curPage;}catch(e){showToast('Network error','error');}}function next(){if(nextOff){curPage++;doSearch(nextOff);scrollTo(0,0);}}function prev(){if(curPage>1){curPage--;doSearch(Math.max(0,curOff-20));scrollTo(0,0);}}var _tt;function showToast(m,t='success'){var x=document.getElementById('toast');x.textContent=m;x.className=`toast ${t} show`;clearTimeout(_tt);_tt=setTimeout(()=>x.classList.remove('show'),3000);}document.addEventListener('DOMContentLoaded',()=>{var q=document.getElementById('q');if(q)q.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch(0);});});"
 
-def is_logged_in(request):
-    session_id = request.cookies.get('admin_session')
-    if not hasattr(temp, 'ADMIN_SESSIONS'): return False
-    return session_id in temp.ADMIN_SESSIONS and time.time() < temp.ADMIN_SESSIONS[session_id]
+# ----------------- UTILS & BUILDERS -----------------
+def _h(html): return web.Response(text=html.encode('utf-8','replace').decode('utf-8'), content_type='text/html', charset='utf-8')
 
-# ---------------------------------------------
-# SHARED ASSETS
-# ---------------------------------------------
-SHARED_HEAD = r"""
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#08090d;--bg2:#0f1117;--bg3:#161821;--bg4:#1e2030;
-  --accent:#5fffb0;--accent2:#00b8ff;--accent3:#ff6b6b;
-  --text:#e8eaf2;--muted:#5a5f7a;--border:#252838;--card:#13151f;
-  --shadow:rgba(0,0,0,0.5);--sidebar-w:260px;
-}
-body.light{
-  --bg:#f0f2f5;--bg2:#ffffff;--bg3:#e8eaef;--bg4:#dde0e8;
-  --text:#1a1c24;--muted:#6b7099;--border:#cdd0de;--card:#ffffff;
-  --shadow:rgba(0,0,0,0.1);
-}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .25s,color .25s;overflow-x:hidden}
+def is_auth(req): 
+    s = req.cookies.get('admin_session')
+    return bool(s and hasattr(temp, 'ADMIN_SESSIONS') and s in temp.ADMIN_SESSIONS and time.time() < temp.ADMIN_SESSIONS[s])
 
-/* -- TOPBAR -- */
-.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;height:54px;position:sticky;top:0;z-index:100;gap:12px;transition:background .25s,border-color .25s}
-.ham-btn{background:none;border:none;cursor:pointer;color:var(--text);display:flex;flex-direction:column;gap:5px;padding:6px;border-radius:6px;transition:background .15s;flex-shrink:0}
-.ham-btn:hover{background:var(--bg3)}
-.ham-line{display:block;width:20px;height:2px;background:currentColor;border-radius:2px;transition:all .25s}
-.ham-btn.open .ham-line:nth-child(1){transform:translateY(7px) rotate(45deg)}
-.ham-btn.open .ham-line:nth-child(2){opacity:0;transform:scaleX(0)}
-.ham-btn.open .ham-line:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+def build_page(title, body, cls="", ad="", as_=""):
+    nav = f'<div class="sidebar-overlay" id="sbOverlay" onclick="closeSidebar()"></div><div class="sidebar" id="sidebar"><div class="sb-header"><div class="sb-logo"><span class="nf-icon">F</span> FAST FINDER</div><button class="sb-close" onclick="closeSidebar()">&#10005;</button></div><nav class="sb-nav"><div class="sb-section">Menu</div><a href="/dashboard" class="sb-link {ad}">Home</a><a href="/stats" class="sb-link {as_}">Database Stats</a></nav><div class="sb-footer"><a href="/logout" class="sb-logout">Sign Out</a></div></div><div class="topbar"><button class="ham-btn" id="hamBtn" onclick="openSidebar()"><span class="ham-line"></span><span class="ham-line"></span><span class="ham-line"></span></button><a class="logo" href="/dashboard"><span class="nf-icon">F</span> FAST FINDER</a><div class="topbar-right"><button class="theme-btn" onclick="toggleTheme()">Theme</button></div></div>' if ad or as_ else ""
+    return _h(f'<!DOCTYPE html><html><head><title>{title}</title><meta name="viewport" content="width=device-width,initial-scale=1"><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&display=swap" rel="stylesheet"><style>{CSS}</style><script>{JS}</script></head><body class="{cls}">{nav}{body}</body></html>')
 
-.logo{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.06em;color:var(--accent);display:flex;align-items:center;gap:7px;text-decoration:none;flex:1}
-.logo-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;box-shadow:0 0 6px var(--accent);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
-.topbar-right{display:flex;align-items:center;gap:8px;margin-left:auto}
-.theme-btn{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'Space Mono',monospace;letter-spacing:.04em;transition:all .15s;display:flex;align-items:center;gap:5px}
-.theme-btn:hover{border-color:var(--accent);color:var(--text)}
+def login_form(err=""):
+    e = f'<div class="err-box">{err}</div>' if err else ""
+    return f'<div class="login-top"><div class="login-logo-big"><span class="nf-icon" style="font-size:32px">F</span> FAST FINDER</div></div><div class="login-wrap"><div class="login-card"><h2>Sign In</h2>{e}<form action="/login" method="post"><input type="text" name="user" placeholder="Email or phone number" required autocomplete="off"><input type="password" name="pass" placeholder="Password" required><button class="submit-btn" type="submit">Sign In</button></form></div></div>'
 
-/* -- SIDEBAR -- */
-.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;opacity:0;pointer-events:none;transition:opacity .25s}
-.sidebar-overlay.open{opacity:1;pointer-events:all}
-.sidebar{position:fixed;top:0;left:0;height:100%;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);z-index:160;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
-.sidebar.open{transform:translateX(0)}
-.sb-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.sb-logo{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.08em;display:flex;align-items:center;gap:7px}
-.sb-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:4px;border-radius:5px;transition:all .15s}
-.sb-close:hover{color:var(--text);background:var(--bg3)}
-
-.sb-nav{padding:12px 8px;flex:1}
-.sb-section{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;font-family:'Space Mono',monospace;padding:4px 8px 8px}
-.sb-link{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;text-decoration:none;color:var(--muted);font-size:14px;font-weight:500;transition:all .15s;margin-bottom:2px;border:1px solid transparent}
-.sb-link:hover{background:var(--bg3);color:var(--text)}
-.sb-link.active{background:rgba(95,255,176,.1);color:var(--accent);border-color:rgba(95,255,176,.2)}
-.sb-icon{font-size:16px;width:22px;text-align:center;flex-shrink:0}
-.sb-arrow{margin-left:auto;font-size:11px;opacity:.4}
-
-.sb-footer{padding:12px 8px;border-top:1px solid var(--border)}
-.sb-logout{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;text-decoration:none;color:#ff6b6b;font-size:14px;font-weight:500;transition:all .15s;border:1px solid transparent;width:100%;background:none;cursor:pointer;font-family:'DM Sans',sans-serif}
-.sb-logout:hover{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.25)}
-
-/* -- SEARCH ZONE -- */
-.search-zone{padding:14px 20px;background:var(--bg2);border-bottom:1px solid var(--border);transition:background .25s}
-.search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.filter-tabs{display:flex;gap:3px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:3px;flex-shrink:0;transition:background .25s}
-.ftab{background:none;border:none;padding:6px 12px;border-radius:6px;font-size:12px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap}
-.ftab.active{background:var(--bg2);color:var(--text);border:1px solid var(--border);box-shadow:0 1px 3px var(--shadow)}
-.search-wrap{flex:1;position:relative;min-width:160px}
-.s-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
-.search-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px 10px 36px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s,background .25s}
-.search-input::placeholder{color:var(--muted)}
-.search-input:focus{border-color:rgba(95,255,176,.5)}
-.search-btn{background:var(--accent);color:#08090d;border:none;border-radius:8px;padding:10px 18px;font-weight:600;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:opacity .15s}
-.search-btn:hover{opacity:.85}
-
-/* -- MAIN -- */
-.main{padding:20px;max-width:900px;margin:0 auto}
-
-/* STATS */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
-@media(max-width:580px){.stats-row{grid-template-columns:repeat(2,1fr)}}
-.scard{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;transition:background .25s,border-color .25s}
-.scard::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.scard.green::before{background:var(--accent)}
-.scard.blue::before{background:var(--accent2)}
-.scard.red::before{background:var(--accent3)}
-.scard.amber::before{background:#ffb547}
-.scard-label{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-family:'Space Mono',monospace;margin-bottom:8px}
-.scard-val{font-size:22px;font-weight:600}
-.scard-sub{font-size:11px;color:var(--muted);margin-top:3px}
-
-/* RESULTS */
-.results-info{display:none;align-items:center;justify-content:space-between;padding:4px 0 12px}
-.results-count{font-family:'Space Mono',monospace;font-size:12px;color:var(--accent)}
-.results-hint{font-size:12px;color:var(--muted)}
-
-/* FILE CARDS */
-.file-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;margin-bottom:10px;transition:border-color .2s,transform .15s,background .25s,opacity .3s;animation:slideIn .18s ease both}
-@keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.file-card:hover{border-color:rgba(95,255,176,.25);transform:translateY(-1px)}
-.fc-top{display:flex;align-items:center;gap:7px;margin-bottom:8px;flex-wrap:wrap}
-.source-badge{font-family:'Space Mono',monospace;font-size:10px;padding:2px 8px;border-radius:4px;letter-spacing:.04em}
-.source-badge.primary{background:rgba(95,255,176,.1);color:#5fffb0;border:1px solid rgba(95,255,176,.25)}
-.source-badge.cloud{background:rgba(0,184,255,.1);color:#00b8ff;border:1px solid rgba(0,184,255,.25)}
-.source-badge.archive{background:rgba(255,181,71,.1);color:#ffb547;border:1px solid rgba(255,181,71,.25)}
-.type-tag{font-size:11px;color:var(--muted);background:var(--bg4);padding:2px 7px;border-radius:4px;transition:background .25s}
-.fc-name{font-size:14px;font-weight:500;line-height:1.4;margin-bottom:6px;word-break:break-word}
-.fc-meta{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
-.fc-actions{display:flex;flex-direction:column;gap:6px;min-width:88px; justify-content:center;}
-.btn-play{background:rgba(95,255,176,.1);border:1px solid rgba(95,255,176,.3);color:#5fffb0;border-radius:7px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;display:block;font-family:'DM Sans',sans-serif;transition:background .15s}
-.btn-play:hover{background:rgba(95,255,176,.2)}
-
-/* EMPTY */
-.empty{text-align:center;padding:56px 20px;color:var(--muted)}
-.empty-icon{font-size:28px;margin-bottom:12px;opacity:.3}
-.empty p{font-size:14px;line-height:1.7}
-
-/* PAGINATION */
-.pagination{display:none;justify-content:center;align-items:center;gap:12px;padding:16px 0 8px}
-.pg-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:border-color .15s,background .25s}
-.pg-btn:hover{border-color:var(--accent)}
-.pg-btn:disabled{opacity:.3;cursor:not-allowed}
-.pg-info{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
-
-/* TOAST */
-.toast{position:fixed;bottom:20px;right:20px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;z-index:300;transform:translateX(130%);transition:transform .25s;pointer-events:none;box-shadow:0 4px 20px var(--shadow)}
-.toast.show{transform:translateX(0)}
-.toast.success{border-color:rgba(95,255,176,.4);color:#5fffb0}
-.toast.error{border-color:rgba(255,107,107,.4);color:#ff6b6b}
-
-/* LOGIN */
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-.login-box{width:100%;max-width:340px}
-.login-logo{font-family:'Space Mono',monospace;font-size:12px;color:var(--accent);text-align:center;margin-bottom:28px;letter-spacing:.1em;display:flex;align-items:center;justify-content:center;gap:8px}
-.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:28px;transition:background .25s}
-.login-card h2{font-size:18px;font-weight:500;margin-bottom:5px}
-.login-card .sub{font-size:13px;color:var(--muted);margin-bottom:22px}
-.login-card label{font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;font-family:'Space Mono',monospace;display:block;margin-bottom:6px}
-.login-card input[type=text],.login-card input[type=password]{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:14px;transition:border .2s,background .25s}
-.login-card input:focus{border-color:rgba(95,255,176,.4)}
-.login-card .submit-btn{width:100%;background:var(--accent);color:#08090d;border:none;border-radius:8px;padding:12px;font-weight:600;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s}
-.login-card .submit-btn:hover{opacity:.85}
-.err-box{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);color:#ff6b6b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px}
-.theme-corner{position:fixed;top:14px;right:16px;z-index:10}
-
-/* Stats Page Big Card */
-.big-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-bottom:20px;transition:background .25s;}
-.big-stat-val{font-size:48px;font-weight:700;color:var(--accent);margin-bottom:5px;font-family:'DM Sans',sans-serif;}
-.big-stat-label{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-family:'Space Mono',monospace;}
-</style>
-"""
-
-THEME_JS = r"""<script>
-(function(){if(localStorage.getItem('theme')==='light')document.body.classList.add('light')})();
-function toggleTheme(){
-  var l=document.body.classList.toggle('light');
-  localStorage.setItem('theme',l?'light':'dark');
-  var b=document.getElementById('themeBtn');
-  if(b){b.querySelector('.ti').innerHTML=l?'&#9661;':'&#9728;';b.querySelector('.tl').textContent=l?'Dark':'Light';}
-}
-function initThemeBtn(){
-  var b=document.getElementById('themeBtn');
-  if(!b)return;
-  var l=document.body.classList.contains('light');
-  b.querySelector('.ti').innerHTML=l?'&#9661;':'&#9728;';
-  b.querySelector('.tl').textContent=l?'Dark':'Light';
-}
-</script>"""
-
-# ✅ SIDEBAR UPDATED: "Manage Files" (Search) and "Database Stats" (Cards)
-SIDEBAR_HTML = r"""
-<div class="sidebar-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
-<div class="sidebar" id="sidebar">
-  <div class="sb-header">
-    <div class="sb-logo"><div class="logo-dot"></div>CINEMATIC_BOT</div>
-    <button class="sb-close" onclick="closeSidebar()">&#10005;</button>
-  </div>
-  <nav class="sb-nav">
-    <div class="sb-section">Menu</div>
-    <a href="/dashboard" class="sb-link {active_dash}">
-      <span class="sb-icon">&#8981;</span> Search & Manage <span class="sb-arrow">&#8250;</span>
-    </a>
-    <a href="/stats" class="sb-link {active_stats}">
-      <span class="sb-icon">&#8862;</span> Database Stats <span class="sb-arrow">&#8250;</span>
-    </a>
-  </nav>
-  <div class="sb-footer">
-    <a href="/logout" class="sb-logout"><span class="sb-icon">&#9003;</span> Logout</a>
-  </div>
-</div>"""
-
-SIDEBAR_JS = r"""<script>
-function openSidebar(){
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('sbOverlay').classList.add('open');
-  document.getElementById('hamBtn').classList.add('open');
-}
-function closeSidebar(){
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sbOverlay').classList.remove('open');
-  document.getElementById('hamBtn').classList.remove('open');
-}
-</script>"""
-
-SEARCH_JS = r"""<script>
-var curQ='',curOff=0,nextOff='',curCol='all',curPage=1;
-function setCol(el){
-  document.querySelectorAll('.ftab').forEach(function(t){t.classList.remove('active')});
-  el.classList.add('active');curCol=el.dataset.col;
-}
-
-function srcClass(src){
-  if(!src) return 'primary';
-  var s=src.toLowerCase();
-  if(s==='primary'||s==='cloud'||s==='archive') return s;
-  return 'primary';
-}
-
-async function doSearch(off){
-  var q=document.getElementById('q').value.trim();
-  if(!q){showToast('Search term daalen','error');return;}
-  curQ=q;curOff=off;if(off===0)curPage=1;
-  
-  try {
-      var res=await fetch('/api/search?q='+encodeURIComponent(q)+'&offset='+off+'&col='+curCol);
-      if(!res.ok){showToast('API Error: '+res.status,'error');return;}
-      
-      var data=await res.json();
-      if(data.error){showToast(data.error,'error');return;}
-      
-      document.getElementById('resInfo').style.display='flex';
-      document.getElementById('resCount').textContent=data.total.toLocaleString()+' result'+(data.total!==1?'s':'')+' \u2014 "'+q+'"';
-      
-      if(!data.results||!data.results.length){
-        document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">\u25c8</div><p>No files found in <b>'+curCol+'</b> for \u201c'+q+'\u201d</p></div>';
-        document.getElementById('pageBox').style.display='none';return;
-      }
-      
-      var html='';
-      data.results.forEach(function(f,i){
-        var sc=srcClass(f.source);
-        var d=(i*.04)+'s';
-        
-        html += '<div class="file-card" style="animation-delay:' + d + '">' +
-            '<div><div class="fc-top"><span class="source-badge ' + sc + '">' + sc.toUpperCase() + '</span><span class="type-tag">' + f.type + '</span></div>' +
-            '<div class="fc-name">' + f.name + '</div>' +
-            '<div class="fc-meta"><span>&#128190; ' + f.size + '</span></div></div>' +
-            '<div class="fc-actions pub"><a href="' + f.watch + '" target="_blank" class="btn-play">&#9654; Stream/Play</a></div>' +
-            '</div>';
-      });
-      
-      document.getElementById('results').innerHTML=html;
-      nextOff=data.next_offset;
-      document.getElementById('pageBox').style.display='flex';
-      document.getElementById('pBtn').disabled=(off===0);
-      document.getElementById('nBtn').disabled=!nextOff;
-      document.getElementById('pgInfo').textContent='Page '+curPage;
-      
-  } catch(e) {
-      showToast('Network error','error');
-  }
-}
-
-function next(){if(nextOff){curPage++;doSearch(nextOff);scrollTo(0,0);}}
-function prev(){if(curPage>1){curPage--;doSearch(Math.max(0,curOff-20));scrollTo(0,0);}}
-
-var _tt;
-function showToast(msg,type){
-  type=type||'success';
-  var t=document.getElementById('toast');
-  t.textContent=(type==='success'?'\u2713  ':' ')+msg;t.className='toast '+type+' show';
-  clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('show');},2800);
-}
-
-document.addEventListener('DOMContentLoaded',function(){
-  if(typeof initThemeBtn === 'function') initThemeBtn();
-  var qInput = document.getElementById('q');
-  if(qInput) qInput.addEventListener('keydown',function(e){if(e.key==='Enter')doSearch(0);});
-});
-</script>"""
-
-def topbar_html(active):
-    active_dash = 'active' if active == 'dashboard' else ''
-    active_stats = 'active' if active == 'stats' else ''
-    sidebar = SIDEBAR_HTML.replace('{active_dash}', active_dash).replace('{active_stats}', active_stats)
-    return f"""
-{sidebar}
-<div class="topbar">
-  <button class="ham-btn" id="hamBtn" onclick="openSidebar()">
-    <span class="ham-line"></span><span class="ham-line"></span><span class="ham-line"></span>
-  </button>
-  <a class="logo" href="/dashboard"><div class="logo-dot"></div>CINEMATIC_BOT</a>
-  <div class="topbar-right">
-    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
-      <span class="ti">&#9728;</span><span class="tl">Light</span>
-    </button>
-  </div>
-</div>"""
-
-# ---------------------------------------------
-# LOGIN PAGE
-# ---------------------------------------------
+# ----------------- ROUTES -----------------
 @admin_routes.get('/admin')
-async def login_page(request):
-    html = f"""<!DOCTYPE html><html><head><title>Login</title>{SHARED_HEAD}{THEME_JS}</head><body>
-<div class="theme-corner">
-  <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
-    <span class="ti">&#9728;</span><span class="tl">Light</span>
-  </button>
-</div>
-<div class="login-wrap"><div class="login-box">
-  <div class="login-logo"><div class="logo-dot"></div>CINEMATIC_BOT</div>
-  <div class="login-card">
-    <h2>Admin access</h2>
-    <p class="sub">Enter credentials to continue</p>
-    <form action="/login" method="post">
-      <label>Username</label>
-      <input type="text" name="user" placeholder="admin" required autocomplete="off">
-      <label>Password</label>
-      <input type="password" name="pass" placeholder="••••••••" required>
-      <button class="submit-btn" type="submit">Sign in &#8594;</button>
-    </form>
-  </div>
-</div></div>
-<script>document.addEventListener('DOMContentLoaded',initThemeBtn);</script>
-</body></html>"""
-    return safe_html_response(html)
+async def login_p(req): return build_page("Sign In", login_form(), "login-bg")
 
 @admin_routes.post('/login')
-async def login_post(request):
-    data = await request.post()
-    if data.get('user') == ADMIN_USERNAME and data.get('pass') == ADMIN_PASSWORD:
-        session_id = str(uuid.uuid4())
+async def login_post(req):
+    d = await req.post()
+    if d.get('user') == ADMIN_USERNAME and d.get('pass') == ADMIN_PASSWORD:
+        s = str(uuid.uuid4())
         if not hasattr(temp, 'ADMIN_SESSIONS'): temp.ADMIN_SESSIONS = {}
-        temp.ADMIN_SESSIONS[session_id] = time.time() + 3600
+        temp.ADMIN_SESSIONS[s] = time.time() + 3600
         res = web.HTTPFound('/dashboard')
-        res.set_cookie('admin_session', session_id, max_age=3600)
-        try:
-            btn = [[InlineKeyboardButton("🛑 Disconnect Web Session", callback_data=f"logout_{session_id}")]]
-            await temp.BOT.send_message(chat_id=ADMINS[0], text="✅ **Web Login Detected!**\n\nYour session is active for 1 hour.", reply_markup=InlineKeyboardMarkup(btn))
+        res.set_cookie('admin_session', s, max_age=3600)
+        try: await temp.BOT.send_message(ADMINS[0], "✅ **Fast Finder Web Login!**", reply_markup=IKM([[IKB("🛑 Disconnect", callback_data=f"logout_{s}")]]))
         except: pass
         return res
-    html = f"""<!DOCTYPE html><html><head><title>Login</title>{SHARED_HEAD}{THEME_JS}</head><body>
-<div class="theme-corner">
-  <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
-    <span class="ti">&#9728;</span><span class="tl">Light</span>
-  </button>
-</div>
-<div class="login-wrap"><div class="login-box">
-  <div class="login-logo"><div class="logo-dot"></div>CINEMATIC_BOT</div>
-  <div class="login-card">
-    <h2>Admin access</h2>
-    <p class="sub">Enter credentials to continue</p>
-    <div class="err-box">&#10005; &nbsp;Wrong credentials. Try again.</div>
-    <form action="/login" method="post">
-      <label>Username</label>
-      <input type="text" name="user" placeholder="admin" required autocomplete="off">
-      <label>Password</label>
-      <input type="password" name="pass" placeholder="••••••••" required>
-      <button class="submit-btn" type="submit">Sign in &#8594;</button>
-    </form>
-  </div>
-</div></div>
-<script>document.addEventListener('DOMContentLoaded',initThemeBtn);</script>
-</body></html>"""
-    return safe_html_response(html)
+    return build_page("Sign In", login_form("Sorry, account not found. Try again."), "login-bg")
 
-# ---------------------------------------------
-# DASHBOARD (Fast Search)
-# ---------------------------------------------
 @admin_routes.get('/dashboard')
-async def admin_dashboard(request):
-    if not is_logged_in(request): return web.HTTPFound('/admin')
-    tb = topbar_html('dashboard')
-    
-    # ✅ FIX: Stats counting removed from here for SUPERFAST Loading!
-    html = f"""<!DOCTYPE html><html><head><title>Search Files</title>{SHARED_HEAD}{THEME_JS}</head><body>
-{tb}
-{SIDEBAR_JS}
-<div class="search-zone">
-  <div class="search-row">
-    <div class="filter-tabs">
-      <button class="ftab active" data-col="all" onclick="setCol(this)">All</button>
-      <button class="ftab" data-col="primary" onclick="setCol(this)">Primary</button>
-      <button class="ftab" data-col="cloud" onclick="setCol(this)">Cloud</button>
-      <button class="ftab" data-col="archive" onclick="setCol(this)">Archive</button>
-    </div>
-    <div class="search-wrap">
-      <span class="s-icon">&#9906;</span>
-      <input class="search-input" id="q" placeholder="Search movies or series&#8230;">
-    </div>
-    <button class="search-btn" onclick="doSearch(0)">Search</button>
-  </div>
-</div>
-<div class="main" style="padding-top: 15px;">
-  <div class="results-info" id="resInfo">
-    <span class="results-count" id="resCount"></span>
-    <span class="results-hint">Click Play to stream file</span>
-  </div>
-  <div id="results">
-    <div class="empty"><div class="empty-icon">&#9672;</div><p>Type a movie or series name above<br>and press Search</p></div>
-  </div>
-  <div class="pagination" id="pageBox">
-    <button class="pg-btn" id="pBtn" onclick="prev()" disabled>&#8592; Previous</button>
-    <span class="pg-info" id="pgInfo">Page 1</span>
-    <button class="pg-btn" id="nBtn" onclick="next()">Next &#8594;</button>
-  </div>
-</div>
-<div class="toast" id="toast"></div>
-{SEARCH_JS}
-</body></html>"""
-    return safe_html_response(html)
+async def dash(req):
+    if not is_auth(req): return web.HTTPFound('/admin')
+    b = '<div class="search-zone"><div class="search-row"><div class="filter-tabs"><button class="ftab active" data-col="all" onclick="setCol(this)">All</button><button class="ftab" data-col="primary" onclick="setCol(this)">Movies</button><button class="ftab" data-col="cloud" onclick="setCol(this)">Series</button><button class="ftab" data-col="archive" onclick="setCol(this)">Archive</button></div><div class="search-wrap"><span class="s-icon">&#9906;</span><input class="search-input" id="q" placeholder="Titles, people, genres"></div><button class="search-btn" onclick="doSearch(0)">Search</button></div></div><div class="main" style="padding-top:20px;"><div class="results-info" id="resInfo"><span class="results-count" id="resCount"></span></div><div id="results"><div class="empty"><div class="empty-icon">&#8981;</div><p>Find your favorite movies and TV shows.</p></div></div><div class="pagination" id="pageBox"><button class="pg-btn" id="pBtn" onclick="prev()" disabled>Previous</button><span class="pg-info" id="pgInfo">Page 1</span><button class="pg-btn" id="nBtn" onclick="next()">Next</button></div></div><div class="toast" id="toast"></div>'
+    return build_page("Home - Fast Finder", b, "", "active", "")
 
-# ---------------------------------------------
-# NEW PAGE: STATS
-# ---------------------------------------------
 @admin_routes.get('/stats')
-async def stats_page(request):
-    if not is_logged_in(request): return web.HTTPFound('/admin')
-    try: stats = await db_count_documents()
-    except: stats = {}
-    try: total_u = await user_db.total_users_count()
-    except: total_u = 0
-        
-    if isinstance(stats, int):
-        stats = {'total': stats, 'primary': stats, 'cloud': 0, 'archive': 0}
-        
-    p_count = stats.get('primary', 0)
-    c_count = stats.get('cloud', 0)
-    a_count = stats.get('archive', 0)
-    t_count = stats.get('total', 0)
-    tb = topbar_html('stats')
-    
-    # ✅ FIX: This page is dedicated only for showing 4 beautiful stats cards!
-    html = f"""<!DOCTYPE html><html><head><title>Database Stats</title>{SHARED_HEAD}{THEME_JS}
-    <style>
-        .big-stat {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 35px 20px; text-align: center; margin-bottom: 25px; transition: background .25s, border-color .25s; }}
-        .big-stat-val {{ font-size: 46px; font-weight: 700; color: var(--accent); margin-bottom: 8px; font-family: 'DM Sans', sans-serif; }}
-        .big-stat-label {{ font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-family: 'Space Mono', monospace; }}
-    </style>
-    </head><body>
-{tb}
-{SIDEBAR_JS}
-<div class="main" style="padding-top: 30px;">
-  <div class="big-stat">
-     <div class="big-stat-val">{t_count:,}</div>
-     <div class="big-stat-label">Total Files in Database</div>
-  </div>
-  <div class="stats-row">
-    <div class="scard green"><div class="scard-label">Primary</div><div class="scard-val">{p_count:,}</div><div class="scard-sub">Main collection</div></div>
-    <div class="scard blue"><div class="scard-label">Cloud</div><div class="scard-val">{c_count:,}</div><div class="scard-sub">Remote storage</div></div>
-    <div class="scard amber"><div class="scard-label">Archive</div><div class="scard-val">{a_count:,}</div><div class="scard-sub">Backup files</div></div>
-    <div class="scard red"><div class="scard-label">Users</div><div class="scard-val">{total_u:,}</div><div class="scard-sub">Total registered</div></div>
-  </div>
-</div>
-</body></html>"""
-    return safe_html_response(html)
+async def stats(req):
+    if not is_auth(req): return web.HTTPFound('/admin')
+    try: s = await db_count_documents(); s = s if isinstance(s, dict) else {'total':s,'primary':s,'cloud':0,'archive':0}
+    except: s = {'total':0,'primary':0,'cloud':0,'archive':0}
+    try: u = await user_db.total_users_count()
+    except: u = 0
+    b = f'<div class="main" style="padding-top:40px;"><div class="big-stat"><div class="big-stat-val">{s.get("total",0):,}</div><div class="big-stat-label">Total Titles Available</div></div><div class="stats-row"><div class="scard red"><div class="scard-label">Movies</div><div class="scard-val">{s.get("primary",0):,}</div><div class="scard-sub">Primary source</div></div><div class="scard white"><div class="scard-label">Series</div><div class="scard-val">{s.get("cloud",0):,}</div><div class="scard-sub">Cloud storage</div></div><div class="scard grey"><div class="scard-label">Archive</div><div class="scard-val">{s.get("archive",0):,}</div><div class="scard-sub">Backup library</div></div><div class="scard red"><div class="scard-label">Profiles</div><div class="scard-val">{u:,}</div><div class="scard-sub">Active watchers</div></div></div></div>'
+    return build_page("Stats - Fast Finder", b, "", "", "active")
 
-# ---------------------------------------------
-# LOGOUT
-# ---------------------------------------------
 @admin_routes.get('/logout')
-async def logout(request):
-    session_id = request.cookies.get('admin_session')
-    if hasattr(temp, 'ADMIN_SESSIONS') and session_id in temp.ADMIN_SESSIONS:
-        del temp.ADMIN_SESSIONS[session_id]
+async def logout(req):
+    s = req.cookies.get('admin_session')
+    if hasattr(temp, 'ADMIN_SESSIONS') and s in temp.ADMIN_SESSIONS: del temp.ADMIN_SESSIONS[s]
     res = web.HTTPFound('/admin')
     res.del_cookie('admin_session')
     return res
