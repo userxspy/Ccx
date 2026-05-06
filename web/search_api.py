@@ -26,14 +26,18 @@ async def api_search_handler(request):
 
     try:
         offset = int(offset)
-    except:
+    except ValueError:
         offset = 0
 
     if not query:
         return web.json_response({"results": [], "total": 0, "next_offset": ""})
 
-    # पुराना working logic — partial match के लिए re.escape नहीं
-    regex = re.compile(query, re.IGNORECASE)
+    # 🔒 Regex Crash Fix: अगर यूजर '(', '[' जैसे कैरेक्टर डालेगा तो सर्वर क्रैश नहीं होगा
+    try:
+        regex = re.compile(query, re.IGNORECASE)
+    except re.error:
+        regex = re.compile(re.escape(query), re.IGNORECASE)
+
     filter_query = {"file_name": regex}
 
     total_count = 0
@@ -59,7 +63,9 @@ async def api_search_handler(request):
     results = []
     for doc in page_docs:
         target_id = doc.get("file_ref", doc.get("file_id"))
+        
         results.append({
+            "id": str(doc["_id"]),  # ✅ FIX: यह JS के Edit/Delete बटन के लिए बहुत ज़रूरी है!
             "name": doc.get("file_name", "Unknown File"),
             "size": get_size(doc.get("file_size", 0)),
             "type": doc.get("file_type", "document").upper(),
@@ -89,11 +95,13 @@ async def setup_stream_handler(request):
         return web.Response(text="Invalid Request", status=400)
 
     try:
+        # फाइल को BIN_CHANNEL में भेजकर उसका मैसेज ID (स्ट्रीमिंग के लिए) निकालना
         msg = await temp.BOT.send_cached_media(chat_id=BIN_CHANNEL, file_id=file_id)
         if mode == 'download':
             raise web.HTTPFound(f"/download/{msg.id}")
         else:
             raise web.HTTPFound(f"/watch/{msg.id}")
+            
     except web.HTTPFound:
         raise
     except Exception as e:
