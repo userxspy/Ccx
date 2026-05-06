@@ -22,16 +22,16 @@ class script(object):
 
     STATUS_TXT = """📊 <b>Bot Statistics</b>
 
-👥 <b>Total Users:</b> <code>{}</code>
-👥 <b>Total Groups:</b> <code>{}</code>
-💎 <b>Premium Users:</b> <code>{}</code>
+🦹 <b>Total Users:</b> <code>{}</code>
+👫 <b>Total Groups:</b> <code>{}</code>
+💰 <b>Premium Users:</b> <code>{}</code>
 
-📁 <b>Total Files:</b> <code>{}</code>
- • 📁 Primary: <code>{}</code>
+🗂️ <b>Total Files:</b> <code>{}</code>
+ • ⚡ Primary: <code>{}</code>
  • ☁️ Cloud: <code>{}</code>
- • 📦 Archive: <code>{}</code>
+ • ♻️ Archive: <code>{}</code>
 
-⏱ <b>Bot Uptime:</b> <code>{}</code>"""
+⏰ <b>Uptime:</b> <code>{}</code>"""
 
     NEW_GROUP_TXT = """#NewGroup
 Title - {}
@@ -51,9 +51,8 @@ I can't find the <b>{}</b> in my database! 🥲
 👉 Please read the Instructions to get better results.
 👉 Or not been released yet."""
 
-    FILE_CAPTION = """<i>{file_name}</i>
-
-🚫 ᴘʟᴇᴀsᴇ ᴄʟɪᴄᴋ ᴏɴ ᴛʜᴇ ᴄʟᴏsᴇ ʙᴜᴛᴛᴏɴ ɪꜰ ʏᴏᴜ ʜᴀᴠᴇ sᴇᴇɴ ᴛʜᴇ ᴍᴏᴠɪᴇ 🚫"""
+    # ✅ अब सिर्फ फाइल का नाम बोल्ड में दिखेगा
+    FILE_CAPTION = """<b>{file_name}</b>"""
 
     WELCOME_TEXT = """👋 Hello {mention}, Welcome to {title} group! 💞"""
 
