@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# 🎨 FAST FINDER STREAMING TEMPLATE
+# 🎨 STREAMING TEMPLATE (Real Netflix Premium Look)
 # ─────────────────────────────────────────────
 watch_tmplt = """
 <!DOCTYPE html>
@@ -21,213 +21,223 @@ watch_tmplt = """
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
     <style>
         :root {{
-            --primary: #009DE0; /* Fast Finder Blue */
-            --secondary: #F05A28; /* Fast Finder Orange */
-            --bg: #141414;
-            --text: #ffffff;
-            --nav-bg: rgba(0, 0, 0, 0.7);
+            --netflix-red: #E50914;
+            --bg-dark: #141414;
+            --bg-darker: #000000;
+            --text-white: #ffffff;
+            --text-gray: #b3b3b3;
         }}
         
-        /* Light Mode Colors */
-        body.light-mode {{
-            --bg: #f4f6f8;
-            --text: #1a1a1a;
-            --nav-bg: rgba(255, 255, 255, 0.9);
-        }}
-
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         
         body {{
             font-family: 'Montserrat', sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            background-color: var(--bg-dark);
+            background-image: radial-gradient(circle at center, #1f1f1f 0%, #000000 100%);
+            color: var(--text-white);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            transition: background 0.3s, color 0.3s;
         }}
 
+        /* Navbar Style */
         .navbar {{
-            padding: 15px 4%;
+            padding: 20px 4%;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            background: var(--nav-bg);
-            backdrop-filter: blur(10px);
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7) 10%, rgba(0,0,0,0));
             position: fixed;
             width: 100%;
             z-index: 100;
             top: 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }}
         
         .logo {{
-            font-size: 1.8rem;
+            color: var(--netflix-red);
+            font-size: 2rem;
             font-weight: 800;
-            letter-spacing: 1px;
-            color: var(--secondary);
+            letter-spacing: 2px;
             text-transform: uppercase;
+            text-shadow: 0px 0px 10px rgba(229, 9, 20, 0.5);
         }}
-        .logo span {{ color: var(--primary); }}
 
-        .theme-btn {{
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text);
-            transition: transform 0.2s;
-        }}
-        .theme-btn:hover {{ transform: scale(1.1); }}
-
+        /* Main Content */
         .hero-container {{
             flex: 1;
             display: flex;
             flex-direction: column;
+            justify-content: center;
+            align-items: center;
             padding: 80px 20px 40px;
             width: 100%;
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
         }}
 
         .player-box {{
             width: 100%;
+            position: relative;
             border-radius: 12px;
             overflow: hidden;
             background: #000;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            position: relative;
+            /* Cinematic Glow Effect */
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8), 0 0 100px rgba(229, 9, 20, 0.15); 
+            border: 1px solid #333;
         }}
 
-        .info-section {{ margin-top: 20px; }}
+        .video-container video {{
+            width: 100%;
+            height: auto;
+            display: block;
+        }}
+
+        .info-section {{
+            width: 100%;
+            margin-top: 25px;
+            text-align: left;
+        }}
 
         .title {{
-            font-size: 1.4rem;
+            font-size: 2rem;
             font-weight: 700;
             margin-bottom: 15px;
-            word-wrap: break-word;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }}
 
-        .controls-row {{ display: flex; gap: 12px; flex-wrap: wrap; }}
+        .controls-row {{
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }}
 
+        /* Netflix Style Buttons */
         .btn {{
             display: inline-flex;
             align-items: center;
-            padding: 10px 24px;
-            font-size: 1rem;
+            justify-content: center;
+            padding: 12px 28px;
+            font-size: 1.1rem;
             font-weight: 600;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
             text-decoration: none;
             border: none;
-            transition: opacity 0.2s;
         }}
-        .btn:hover {{ opacity: 0.8; }}
 
-        .btn-dl {{ background-color: var(--primary); color: white; }}
-        .btn-copy {{ background-color: var(--secondary); color: white; }}
+        .btn-play {{
+            background-color: var(--text-white);
+            color: black;
+        }}
+        .btn-play:hover {{ opacity: 0.8; }}
 
-        .plyr--video {{ --plyr-color-main: var(--primary); }}
+        .btn-download {{
+            background-color: rgba(109, 109, 110, 0.7);
+            color: white;
+            backdrop-filter: blur(5px);
+        }}
+        .btn-download:hover {{ background-color: rgba(109, 109, 110, 0.4); }}
+        
+        .btn-copy {{
+            background-color: transparent;
+            color: var(--text-gray);
+            border: 1px solid var(--text-gray);
+            font-size: 0.9rem;
+            padding: 10px 20px;
+        }}
+        .btn-copy:hover {{ border-color: white; color: white; }}
 
+        .icon {{ margin-right: 10px; width: 20px; height: 20px; }}
+
+        /* Custom Plyr Theme */
+        .plyr--video {{
+            --plyr-color-main: var(--netflix-red);
+            --plyr-video-background: #000;
+        }}
+
+        /* Toast */
         #toast {{
             visibility: hidden;
-            background-color: #333;
+            min-width: 250px;
+            background-color: var(--netflix-red);
             color: white;
-            padding: 12px 24px;
-            border-radius: 6px;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
             position: fixed;
-            bottom: 30px;
-            right: 30px;
             z-index: 99;
+            right: 30px;
+            bottom: 30px;
             font-weight: 600;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }}
-        #toast.show {{ visibility: visible; animation: fade 2.5s; }}
+        #toast.show {{ visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }}
 
-        @keyframes fade {{
-            0%, 100% {{ opacity: 0; transform: translateY(10px); }}
-            10%, 90% {{ opacity: 1; transform: translateY(0); }}
+        @keyframes fadein {{ from {{bottom: 0; opacity: 0;}} to {{bottom: 30px; opacity: 1;}} }}
+        @keyframes fadeout {{ from {{bottom: 30px; opacity: 1;}} to {{bottom: 0; opacity: 0;}} }}
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {{
+            .logo {{ font-size: 1.5rem; }}
+            .title {{ font-size: 1.4rem; }}
+            .btn {{ width: 100%; margin-bottom: 10px; }}
+            .hero-container {{ padding-top: 70px; }}
         }}
     </style>
 </head>
 <body>
 
     <div class="navbar">
-        <div class="logo">FAST<span>FINDER</span></div>
-        <button class="theme-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌓</button>
+        <div class="logo">Fast <span style="font-size: 0.8rem; color:white; font-weight:400;">Finder</span></div>
     </div>
 
     <div class="hero-container">
+        
         <div class="player-box">
-            <video id="player" playsinline>
+            <video id="player" playsinline poster="https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/US-en-20220502-popsignuptwoweeks-perspective_alpha_website_medium.jpg">
                 <source src="{src}" type="{mime_type}" />
             </video>
         </div>
 
         <div class="info-section">
             <div class="title">{file_name}</div>
+            
             <div class="controls-row">
-                <a href="{src}" class="btn btn-dl">📥 Download</a>
-                <button onclick="copyLink()" class="btn btn-copy">📋 Copy Link</button>
+                <a href="{src}" class="btn btn-play">
+                    <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4M12 3v12M8 11l4 4 4-4"/></svg>
+                    Download
+                </a>
+
+                <button onclick="copyLink()" class="btn btn-download">
+                    <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    Copy Link
+                </button>
             </div>
         </div>
+
     </div>
 
-    <div id="toast">Link Copied Successfully!</div>
+    <div id="toast">Link Copied!</div>
 
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script>
-        // 1. Theme Toggle Logic
-        function toggleTheme() {{
-            document.body.classList.toggle('light-mode');
-            // Save preference to local storage
-            const isLight = document.body.classList.contains('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-        }}
-
-        // Load saved theme
-        if(localStorage.getItem('theme') === 'light') {{
-            document.body.classList.add('light-mode');
-        }}
-
-        // 2. Player Initialization (5s seek enabled natively)
         const player = new Plyr('#player', {{
             controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'settings', 'pip', 'fullscreen'],
             settings: ['speed'],
-            seekTime: 5, // Set native seek time to 5 seconds
             hideControls: true
         }});
 
-        // 3. YouTube-style Double Tap to Seek (5s)
-        let lastTap = 0;
-        document.querySelector('.player-box').addEventListener('click', function(e) {{
-            const currentTime = new Date().getTime();
-            const tapLength = currentTime - lastTap;
-            
-            if (tapLength < 300 && tapLength > 0) {{
-                const rect = this.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                
-                // If clicked on left half, rewind. Else forward.
-                if (clickX < rect.width / 2) {{
-                    player.rewind(5);
-                }} else {{
-                    player.forward(5);
-                }}
-                e.preventDefault();
-            }}
-            lastTap = currentTime;
-        }});
-
-        // 4. Copy Link Logic
         function copyLink() {{
-            navigator.clipboard.writeText("{src}").then(() => {{
-                const toast = document.getElementById("toast");
-                toast.className = "show";
-                setTimeout(() => toast.className = toast.className.replace("show", ""), 2500);
-            }}).catch(err => {{
-                console.error('Failed to copy: ', err);
-            }});
+            const el = document.createElement('textarea');
+            el.value = "{src}";
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            var x = document.getElementById("toast");
+            x.className = "show";
+            setTimeout(function(){{ x.className = x.className.replace("show", ""); }}, 3000);
         }}
     </script>
 </body>
@@ -247,7 +257,7 @@ async def media_watch(message_id):
         tag = mime_type.split('/')[0].strip()
         
         if tag == 'video':
-            file_name = html.escape(media.file_name if hasattr(media, 'file_name') else "Fast Finder Video")
+            file_name = html.escape(media.file_name if hasattr(media, 'file_name') else "Netflix Movie")
             
             return watch_tmplt.format(
                 heading=f"Watch {file_name}",
@@ -259,9 +269,8 @@ async def media_watch(message_id):
             return f"""
             <body style="background:#141414; color:white; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
                 <div style="text-align:center;">
-                    <h1 style="color:#F05A28">⚠️ File Format Not Supported</h1>
-                    <p style="margin:10px 0;">Only videos can be streamed directly.</p>
-                    <a href="{src}" style="background:#009DE0; color:white; text-decoration:none; font-weight:600; padding:12px 24px; border-radius:6px; margin-top:15px; display:inline-block;">Download File Instead</a>
+                    <h1>⚠️ File Format Not Supported</h1>
+                    <a href="{src}" style="color:#E50914; text-decoration:none; font-size:1.2rem; border:1px solid #E50914; padding:10px 20px; border-radius:4px; margin-top:20px; display:inline-block;">Download Direct</a>
                 </div>
             </body>
             """
