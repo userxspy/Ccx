@@ -1,32 +1,488 @@
-import urllib.parse, html, logging
+# web/utils/render_template.py
+
 from info import BIN_CHANNEL, URL
 from utils import temp
+import urllib.parse
+import html
+import logging
 
+# Logger Setup
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# 🎨 MINIFIED STREAMING TEMPLATE (Netflix Style + MKV Fix)
+# 🎬 FAST FINDER PREMIUM STREAM TEMPLATE
 # ─────────────────────────────────────────────
-watch_tmplt = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{heading}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800;900&display=swap"><link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css"/><style>:root{{--netflix-red:#E50914;--bg-dark:#141414;--bg-darker:#000;--text-white:#fff;--text-gray:#b3b3b3}}*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:\'Montserrat\',sans-serif;background-color:var(--bg-dark);background-image:radial-gradient(circle at center,#1f1f1f 0,#000 100%);color:var(--text-white);min-height:100vh;display:flex;flex-direction:column}}.navbar{{padding:20px 4%;display:flex;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,.7) 10%,transparent);position:fixed;width:100%;z-index:100;top:0}}.logo{{color:var(--netflix-red);font-size:2rem;font-weight:900;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:10px;text-shadow:0 0 10px rgba(229,9,20,.3)}}.nf-icon{{background:var(--netflix-red);color:#fff;padding:2px 10px;border-radius:4px;font-size:2.2rem;line-height:1;text-shadow:none}}.hero-container{{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:80px 20px 40px;width:100%;max-width:1200px;margin:0 auto}}.player-box{{width:100%;position:relative;border-radius:12px;overflow:hidden;background:#000;box-shadow:0 0 40px rgba(0,0,0,.8),0 0 100px rgba(229,9,20,.15);border:1px solid #333}}.video-container video{{width:100%;height:auto;display:block}}.info-section{{width:100%;margin-top:25px;text-align:left}}.title{{font-size:2rem;font-weight:700;margin-bottom:5px;text-shadow:2px 2px 4px rgba(0,0,0,.5)}}.mkv-warning{{display:none;color:#E50914;font-size:0.9rem;font-weight:600;margin-bottom:15px;background:rgba(229,9,20,0.1);padding:8px 12px;border-radius:4px;border:1px solid rgba(229,9,20,0.3)}}.controls-row{{display:flex;gap:15px;flex-wrap:wrap}}.btn{{display:inline-flex;align-items:center;justify-content:center;padding:12px 28px;font-size:1.1rem;font-weight:600;border-radius:4px;cursor:pointer;transition:transform .2s,opacity .2s;text-decoration:none;border:none}}.btn-play{{background-color:var(--text-white);color:#000}}.btn-play:hover{{opacity:.8}}.btn-download{{background-color:rgba(109,109,110,.7);color:#fff;backdrop-filter:blur(5px)}}.btn-download:hover{{background-color:rgba(109,109,110,.4)}}.btn-copy{{background-color:transparent;color:var(--text-gray);border:1px solid var(--text-gray);font-size:.9rem;padding:10px 20px}}.btn-copy:hover{{border-color:#fff;color:#fff}}.icon{{margin-right:10px;width:20px;height:20px}}.plyr--video{{--plyr-color-main:var(--netflix-red);--plyr-video-background:#000}}#toast{{visibility:hidden;min-width:250px;background-color:var(--netflix-red);color:#fff;text-align:center;border-radius:4px;padding:16px;position:fixed;z-index:99;right:30px;bottom:30px;font-weight:600;box-shadow:0 5px 15px rgba(0,0,0,.3)}}#toast.show{{visibility:visible;animation:fadein .5s,fadeout .5s 2.5s}}@keyframes fadein{{from{{bottom:0;opacity:0}}to{{bottom:30px;opacity:1}}}}@keyframes fadeout{{from{{bottom:30px;opacity:1}}to{{bottom:0;opacity:0}}}}@media(max-width:768px){{.logo{{font-size:1.5rem}}.nf-icon{{font-size:1.6rem;padding:2px 8px}}.title{{font-size:1.4rem}}.btn{{width:100%;margin-bottom:10px}}.hero-container{{padding-top:70px}}}}</style></head><body><div class="navbar"><div class="logo"><span class="nf-icon">F</span> FAST FINDER</div></div><div class="hero-container"><div class="player-box"><video id="player" playsinline poster="https://assets.nflxext.com/ffe/siteui/vlv3/f841d4c7-10e1-40af-bcae-07a3f8dc141a/f6d7434e-d6de-4185-a6d4-c77a2d08737b/US-en-20220502-popsignuptwoweeks-perspective_alpha_website_medium.jpg"><source src="{src}" type="{mime_type}"/></video></div><div class="info-section"><div class="title">{file_name}</div><div id="mkv-alert" class="mkv-warning">⚠️ MKV File Detected: Browsers may not play this format. Please Download if it fails to play.</div><div class="controls-row"><a href="{src}" class="btn btn-play"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4M12 3v12M8 11l4 4 4-4"/></svg>Download</a><button onclick="copyLink()" class="btn btn-download"><svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Copy Link</button></div></div></div><div id="toast">Link Copied!</div><script src="https://cdn.plyr.io/3.7.8/plyr.js"></script><script>const player=new Plyr(\'#player\',{{controls:[\'play-large\',\'play\',\'progress\',\'current-time\',\'duration\',\'settings\',\'pip\',\'fullscreen\'],settings:[\'speed\'],hideControls:true}}); if("{file_name}".toLowerCase().endsWith(".mkv")) {{ document.getElementById("mkv-alert").style.display = "block"; }} function copyLink(){{const e=document.createElement(\'textarea\');e.value="{src}";document.body.appendChild(e);e.select();document.execCommand(\'copy\');document.body.removeChild(e);var t=document.getElementById("toast");t.className="show";setTimeout(function(){{t.className=t.className.replace("show","");}},3000);}}</script></body></html>'
+watch_tmplt = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{heading}</title>
 
-async def media_watch(msg_id):
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap">
+
+    <!-- Plyr -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
+    <style>
+
+        :root {{
+            --primary-red: #ff0000;
+            --bg-dark: #0b0b0b;
+            --card-dark: #141414;
+            --text-light: #ffffff;
+            --text-gray: #b3b3b3;
+        }}
+
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            background: linear-gradient(to bottom, #000000, #111111);
+            font-family: 'Montserrat', sans-serif;
+            color: white;
+            min-height: 100vh;
+        }}
+
+        /* ───────── NAVBAR ───────── */
+
+        .navbar {{
+            width: 100%;
+            padding: 16px 4%;
+            display: flex;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            z-index: 999;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(0,0,0,0.4), transparent);
+            backdrop-filter: blur(6px);
+        }}
+
+        .logo-wrap {{
+            display: flex;
+            align-items: center;
+        }}
+
+        .site-logo {{
+            height: 58px;
+            width: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 0 12px rgba(255,0,0,0.55));
+            transition: 0.3s ease;
+        }}
+
+        .site-logo:hover {{
+            transform: scale(1.03);
+        }}
+
+        /* ───────── MAIN ───────── */
+
+        .hero-container {{
+            width: 100%;
+            max-width: 1350px;
+            margin: auto;
+            padding: 110px 20px 40px;
+        }}
+
+        .player-box {{
+            width: 100%;
+            overflow: hidden;
+            border-radius: 18px;
+            background: #000;
+            border: 1px solid rgba(255,255,255,0.08);
+
+            box-shadow:
+                0 0 20px rgba(255,0,0,0.15),
+                0 0 80px rgba(255,0,0,0.10),
+                0 20px 60px rgba(0,0,0,0.8);
+        }}
+
+        .video-container video {{
+            width: 100%;
+            height: auto;
+            display: block;
+        }}
+
+        video {{
+            width: 100%;
+            height: auto;
+        }}
+
+        /* ───────── INFO ───────── */
+
+        .info-section {{
+            margin-top: 24px;
+        }}
+
+        .title {{
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.4;
+            margin-bottom: 22px;
+            word-break: break-word;
+        }}
+
+        .controls-row {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }}
+
+        /* ───────── BUTTONS ───────── */
+
+        .btn {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+
+            padding: 13px 26px;
+            border-radius: 10px;
+
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 600;
+
+            cursor: pointer;
+            transition: 0.25s ease;
+
+            border: none;
+        }}
+
+        .btn svg {{
+            width: 20px;
+            height: 20px;
+        }}
+
+        .btn-download {{
+            background: var(--primary-red);
+            color: white;
+            box-shadow: 0 0 18px rgba(255,0,0,0.35);
+        }}
+
+        .btn-download:hover {{
+            transform: translateY(-2px);
+            background: #ff1a1a;
+        }}
+
+        .btn-copy {{
+            background: rgba(255,255,255,0.08);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(6px);
+        }}
+
+        .btn-copy:hover {{
+            background: rgba(255,255,255,0.15);
+        }}
+
+        /* ───────── PLYR CUSTOM ───────── */
+
+        .plyr--video {{
+            --plyr-color-main: #ff0000;
+            --plyr-video-background: #000000;
+            border-radius: 18px;
+            overflow: hidden;
+        }}
+
+        .plyr__control--overlaid {{
+            background: rgba(255,0,0,0.9) !important;
+        }}
+
+        .plyr__control:hover {{
+            background: rgba(255,0,0,0.8) !important;
+        }}
+
+        /* ───────── TOAST ───────── */
+
+        #toast {{
+            visibility: hidden;
+            min-width: 220px;
+
+            background: #ff0000;
+            color: white;
+
+            text-align: center;
+            border-radius: 10px;
+
+            padding: 15px;
+
+            position: fixed;
+            right: 30px;
+            bottom: 30px;
+
+            z-index: 9999;
+
+            font-weight: 600;
+
+            box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+        }}
+
+        #toast.show {{
+            visibility: visible;
+            animation: fadein 0.4s, fadeout 0.4s 2.6s;
+        }}
+
+        @keyframes fadein {{
+            from {{
+                opacity: 0;
+                bottom: 0;
+            }}
+            to {{
+                opacity: 1;
+                bottom: 30px;
+            }}
+        }}
+
+        @keyframes fadeout {{
+            from {{
+                opacity: 1;
+                bottom: 30px;
+            }}
+            to {{
+                opacity: 0;
+                bottom: 0;
+            }}
+        }}
+
+        /* ───────── MOBILE ───────── */
+
+        @media (max-width: 768px) {{
+
+            .hero-container {{
+                padding-top: 95px;
+            }}
+
+            .site-logo {{
+                height: 46px;
+            }}
+
+            .title {{
+                font-size: 1.3rem;
+            }}
+
+            .controls-row {{
+                flex-direction: column;
+            }}
+
+            .btn {{
+                width: 100%;
+            }}
+
+        }}
+
+    </style>
+</head>
+
+<body>
+
+    <!-- NAVBAR -->
+    <div class="navbar">
+
+        <div class="logo-wrap">
+
+            <!-- YOUR FAST FINDER LOGO -->
+            <img
+                src="https://iili.io/3JX0rvt.jpg"
+                alt="Fast Finder"
+                class="site-logo"
+            >
+
+        </div>
+
+    </div>
+
+    <!-- MAIN -->
+    <div class="hero-container">
+
+        <!-- PLAYER -->
+        <div class="player-box">
+
+            <video
+                id="player"
+                playsinline
+                controls
+                poster="https://i.imgur.com/8mKX7Qp.jpeg"
+            >
+                <source src="{src}" type="{mime_type}">
+            </video>
+
+        </div>
+
+        <!-- INFO -->
+        <div class="info-section">
+
+            <div class="title">{file_name}</div>
+
+            <div class="controls-row">
+
+                <!-- DOWNLOAD -->
+                <a href="{src}" class="btn btn-download">
+
+                    <svg fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 16L7 11H10V4H14V11H17L12 16ZM5 20V18H19V20H5Z"/>
+                    </svg>
+
+                    Download
+
+                </a>
+
+                <!-- COPY -->
+                <button onclick="copyLink()" class="btn btn-copy">
+
+                    <svg fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z"/>
+                    </svg>
+
+                    Copy Link
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast">
+        Link Copied Successfully!
+    </div>
+
+    <!-- Plyr -->
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+
+    <script>
+
+        const player = new Plyr('#player', {{
+
+            controls: [
+                'play-large',
+                'play',
+                'progress',
+                'current-time',
+                'mute',
+                'volume',
+                'settings',
+                'pip',
+                'fullscreen'
+            ],
+
+            settings: ['quality', 'speed'],
+            autoplay: false
+
+        }});
+
+        // COPY LINK
+        function copyLink() {{
+
+            navigator.clipboard.writeText("{src}");
+
+            let toast = document.getElementById("toast");
+
+            toast.className = "show";
+
+            setTimeout(() => {{
+                toast.className = toast.className.replace("show", "");
+            }}, 3000);
+
+        }}
+
+    </script>
+
+</body>
+</html>
+"""
+
+# ─────────────────────────────────────────────
+# 🎬 MEDIA WATCH FUNCTION
+# ─────────────────────────────────────────────
+
+async def media_watch(message_id):
+
     try:
-        m = await temp.BOT.get_messages(BIN_CHANNEL, msg_id)
-        media = getattr(m, m.media.value, None) if m and m.media else None
-        
-        if not media: return "<h2>❌ File Not Found or Deleted</h2>"
 
-        src = urllib.parse.urljoin(URL, f'download/{msg_id}')
-        
-        # ✅ FIX: Forcing video/mp4 MIME type to trick browsers into playing MKV files if possible
-        actual_mime = getattr(media, 'mime_type', 'video/mp4')
-        if actual_mime.split('/')[0] == 'video':
-            forced_mime = 'video/mp4' # Tricks the HTML5 player
-            fn = html.escape(getattr(media, 'file_name', "Fast Finder Stream"))
-            return watch_tmplt.format(heading=f"Watch {fn}", file_name=fn, src=src, mime_type=forced_mime)
-            
-        return f'<body style="background:#141414;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;"><div style="position:absolute;top:20px;left:4%;font-size:2rem;font-weight:900;color:#E50914;display:flex;align-items:center;gap:10px;text-transform:uppercase;"><span style="background:#E50914;color:#fff;padding:2px 10px;border-radius:4px;font-size:2.2rem;line-height:1;">F</span> FAST FINDER</div><div style="text-align:center;"><h1>⚠️ File Format Not Supported for Streaming</h1><a href="{src}" style="color:#fff;background:#E50914;text-decoration:none;font-size:1.2rem;font-weight:bold;padding:12px 24px;border-radius:4px;margin-top:20px;display:inline-block;">Download Direct File</a></div></body>'
-        
+        media_msg = await temp.BOT.get_messages(BIN_CHANNEL, message_id)
+
+        media = getattr(media_msg, media_msg.media.value, None)
+
+        if not media:
+            return "<h2>❌ File Not Found or Deleted</h2>"
+
+        src = urllib.parse.urljoin(URL, f'download/{message_id}')
+
+        mime_type = getattr(media, 'mime_type', 'video/mp4')
+
+        tag = mime_type.split('/')[0].strip()
+
+        if tag == 'video':
+
+            file_name = html.escape(
+                media.file_name if hasattr(media, 'file_name')
+                else "Fast Finder Movie"
+            )
+
+            return watch_tmplt.format(
+                heading=f"Watch {file_name}",
+                file_name=file_name,
+                src=src,
+                mime_type=mime_type
+            )
+
+        else:
+
+            return f"""
+
+            <body style="
+                background:#000;
+                color:white;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                height:100vh;
+                font-family:Montserrat,sans-serif;
+            ">
+
+                <div style="
+                    text-align:center;
+                    background:#141414;
+                    padding:40px;
+                    border-radius:18px;
+                    border:1px solid rgba(255,255,255,0.08);
+                ">
+
+                    <h1 style="margin-bottom:20px;">
+                        ⚠️ Unsupported File
+                    </h1>
+
+                    <a
+                        href="{src}"
+                        style="
+                            background:#ff0000;
+                            color:white;
+                            padding:14px 24px;
+                            border-radius:10px;
+                            text-decoration:none;
+                            display:inline-block;
+                            font-weight:600;
+                        "
+                    >
+                        Download Direct
+                    </a>
+
+                </div>
+
+            </body>
+
+            """
+
     except Exception as e:
+
         logger.error(f"Template Error: {e}")
+
         return f"<h2>Server Error: {str(e)}</h2>"
