@@ -73,8 +73,8 @@ async def start(client, message):
             script.NEW_USER_TXT.format(message.from_user.mention, message.from_user.id)
         )
 
-    # Premium Check
-    if IS_PREMIUM and not await is_premium(message.from_user.id, client):
+    # ✅ Premium Check (Admins Bypass)
+    if IS_PREMIUM and message.from_user.id not in ADMINS and not await is_premium(message.from_user.id, client):
         return await message.reply_photo(
             random.choice(PICS),
             caption="🔒 **Premium Required**\n\nBot is only for Premium users.\nUse /plan to buy.",
@@ -158,7 +158,7 @@ async def stats(_, message):
     premium = await db.premium.count_documents({"status.premium": True})
     uptime = get_readable_time(time_now() - temp.START_TIME)
 
-    # ✅ FIX: अब यह सीधे Script.py के STATUS_TXT का इस्तेमाल करेगा
+    # ✅ Script.py से Sync
     text = script.STATUS_TXT.format(
         users, 
         chats, 
@@ -221,7 +221,8 @@ async def delete_all_cmd(client, message):
 @Client.on_message(filters.command("link"))
 async def link_generator(client, message):
     
-    if IS_PREMIUM and not await is_premium(message.from_user.id, client):
+    # ✅ Premium Check (Admins Bypass)
+    if IS_PREMIUM and message.from_user.id not in ADMINS and not await is_premium(message.from_user.id, client):
         btn = [[InlineKeyboardButton("💎 Buy Premium", callback_data="activate_plan")]]
         return await message.reply(
             "🔒 **Premium Feature**\n\nOnly Admins and Premium Users can generate direct links.\nClick below to upgrade!",
