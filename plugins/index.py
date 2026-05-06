@@ -81,9 +81,12 @@ async def process_q(bot):
             if not md or getattr(md, 'file_size', 0) < 2097152: bad += 1; continue
             
             md.caption = m.caption
+            
+            # ✅ FIX: Removed re.sub from inside the f-string to prevent SyntaxError in Python 3.11
             if getattr(md, 'file_name', None):
                 nm, ext = os.path.splitext(md.file_name)
-                md.file_name = f"{re.sub(r'@\w+|[_+.-]', ' ', nm).strip()}{ext}"
+                clean_nm = re.sub(r'@\w+|[_+.-]', ' ', nm).strip()
+                md.file_name = f"{clean_nm}{ext}"
             
             sts = await save_file(md, collection_type=t['col'])
             if sts == 'suc': tf += 1
@@ -96,8 +99,8 @@ async def process_q(bot):
         IS_INDEXING = False
         if os.path.exists(STATE_FILE): os.remove(STATE_FILE) 
         
-        # 📊 Final Custom Report (As per your Screenshot)
-        total_non_media = no_m + bad + dlt # Combining all ignored files into Non-media
+        # 📊 Final Custom Report
+        total_non_media = no_m + bad + dlt 
         
         report = (
             f"📊 **Index Report**\n\n"
