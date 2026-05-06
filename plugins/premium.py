@@ -25,7 +25,7 @@ async def safe_del(c, cid, mids):
     except: pass
 
 # =========================
-# 💎 PREMIUM CHECKER (Imported globally)
+# 💎 PREMIUM CHECKER
 # =========================
 async def is_premium(uid, bot):
     if not IS_PREMIUM or uid in ADMINS: return True
@@ -103,7 +103,12 @@ async def myplan_cmd(c, m):
 
 @Client.on_message(filters.command("plan") & filters.private)
 async def plan_cmd(c, m):
-    if IS_PREMIUM: await m.reply(script.PLAN_TXT.format(PRE_DAY_AMOUNT, RECEIPT_SEND_USERNAME), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💎 Activate Premium", callback_data="buy_prem")]]))
+    if not IS_PREMIUM: return
+    # ✅ FIX: Admin `/plan` check
+    if m.from_user.id in ADMINS:
+        return await m.reply("👑 **You are the Admin!**\nYou already have Lifetime Premium access. No need to buy any plan.", quote=True)
+        
+    await m.reply(script.PLAN_TXT.format(PRE_DAY_AMOUNT, RECEIPT_SEND_USERNAME), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💎 Activate Premium", callback_data="buy_prem")]]))
 
 @Client.on_message(filters.command(["add_prm", "rm_prm"]) & filters.user(ADMINS))
 async def manage_premium(c, m):
@@ -141,8 +146,6 @@ async def prm_list(c, m):
 # =========================
 # 🔘 CALLBACKS
 # =========================
-
-# ✅ FIX: Moved myplan_cb from commands.py to here for perfect SRP rule adherence
 @Client.on_callback_query(filters.regex("^myplan$"))
 async def myplan_cb(client, query):
     if query.from_user.id in ADMINS:
@@ -162,6 +165,10 @@ async def myplan_cb(client, query):
 
 @Client.on_callback_query(filters.regex(r"^(buy_prem|activate_plan)$"))
 async def buy_callback(c, q):
+    # ✅ FIX: Admin Callback Button Check
+    if q.from_user.id in ADMINS:
+        return await q.answer("👑 You are the Admin! You don't need to buy premium.", show_alert=True)
+
     prm_msg = await q.message.edit(f"💎 **Select Plan Duration**\n\nSend days (e.g. `30`).\nPrice: ₹{PRE_DAY_AMOUNT}/day\n\n⏳ Timeout: 60s")
     try:
         resp = await c.listen(q.message.chat.id, timeout=60)
