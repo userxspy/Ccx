@@ -15,6 +15,7 @@ db = AsyncIOMotorClient(
 )[DATABASE_NAME]
 
 COLLECTIONS = {"primary": db.Primary, "cloud": db.Cloud, "archive": db.Archive}
+COLS = COLLECTIONS  # ✅ FIX: इससे वेब डैशबोर्ड और अंदर का कोड दोनों काम करेंगे
 
 async def ensure_indexes():
     for n, c in COLS.items():
