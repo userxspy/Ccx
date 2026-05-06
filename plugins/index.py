@@ -44,9 +44,12 @@ async def process_q(bot):
     try: chat_title = (await bot.get_chat(t['chat'])).title
     except: chat_title = "Unknown"
     
+    # ✅ FIX: अब यह नए मैसेज भेजने के बजाय पुराने वाले (Starting indexing...) को ही एडिट करेगा
     try:
-        status_msg = await bot.send_message(t['msg_chat'], f"⏳ **Started Indexing!**\n📢 Channel: `{chat_title}`")
-    except: status_msg = None
+        status_msg = await bot.edit_message_text(t['msg_chat'], t['msg_id'], f"⏳ **Started Indexing!**\n📢 Channel: `{chat_title}`")
+    except:
+        try: status_msg = await bot.send_message(t['msg_chat'], f"⏳ **Started Indexing!**\n📢 Channel: `{chat_title}`")
+        except: status_msg = None
     
     start_t = time.time()
     tf = dup = err = dlt = no_m = bad = 0
@@ -64,11 +67,17 @@ async def process_q(bot):
                 save_st(t) # 💾 Auto-Resume Save Point
                 try:
                     if status_msg:
+                        # ✅ FIX: Live Progress में अब Saved, Duplicate सब कुछ दिखेगा
+                        live_non_media = no_m + bad + dlt
                         await status_msg.edit(
-                            f"<b>📊 Indexing in Progress...</b>\n\n"
-                            f"📢 <b>Channel:</b> {chat_title}\n"
-                            f"📨 <b>Processed:</b> {cur} / {t['lst']}\n"
-                            f"⏱ <b>Time:</b> {get_readable_time(time.time()-start_t)}",
+                            f"📊 **Indexing in Progress...**\n\n"
+                            f"📢 **Channel:** {chat_title}\n"
+                            f"📨 **Processed:** {cur} / {t['lst']}\n\n"
+                            f"✅ **Saved:** {tf}\n"
+                            f"♻️ **Duplicate:** {dup}\n"
+                            f"❌ **Errors:** {err}\n"
+                            f"🚫 **Non-media:** {live_non_media}\n\n"
+                            f"⏱ **Time:** {get_readable_time(time.time()-start_t)}",
                             reply_markup=IKM([[IKB('🛑 CANCEL', callback_data='index#cancel')]])
                         )
                 except FloodWait as e: await asyncio.sleep(e.value)
@@ -82,7 +91,6 @@ async def process_q(bot):
             
             md.caption = m.caption
             
-            # ✅ FIX: Removed re.sub from inside the f-string to prevent SyntaxError in Python 3.11
             if getattr(md, 'file_name', None):
                 nm, ext = os.path.splitext(md.file_name)
                 clean_nm = re.sub(r'@\w+|[_+.-]', ' ', nm).strip()
@@ -143,15 +151,31 @@ async def index_cbs(bot, q):
                 await msg.delete()
             except: return await q.message.edit("❌ Invalid/Timeout.")
             
-        b = [[IKB('✅ PRIMARY', callback_data=f'index#start#{chat}#{lst}#{skip}#primary'), IKB('📂 CLOUD', callback_data=f'index#start#{chat}#{lst}#{skip}#cloud')],
-             [IKB('📦 ARCHIVES', callback_data=f'index#start#{chat}#{lst}#{skip}#archive')], [IKB('❌ CANCEL', callback_data='close_data')]]
+        b = [
+            [IKB('✅ PRIMARY', callback_data=f'index#start#{chat}#{lst}#{skip}#primary'), 
+             IKB('📂 CLOUD', callback_data=f'index#start#{chat}#{lst}#{skip}#cloud'),
+             IKB('📦 ARCHIVES', callback_data=f'index#start#{chat}#{lst}#{skip}#archive')],
+            [IKB('🔙 BACK', callback_data=f'index#back#{chat}#{lst}'), IKB('❌ CANCEL', callback_data='close_data')]
+        ]
         await q.message.edit(f"🗂️ **Select Collection:**\n⏭️ Skip: `{skip}`", reply_markup=IKM(b))
+        
+    elif idnt == 'back':
+        chat, lst = d[2], d[3]
+        try: chat_title = (await bot.get_chat(int(chat) if str(chat).lstrip('-').isnumeric() else chat)).title
+        except: chat_title = chat
+        
+        b = [
+            [IKB('⚡ START (Skip 0)', callback_data=f'index#yes#{chat}#{lst}#0'), IKB('📝 CUSTOM SKIP', callback_data=f'index#ask_skip#{chat}#{lst}')],
+            [IKB('❌ CANCEL', callback_data='close_data')]
+        ]
+        await q.message.edit(f'🗂️ **Ready to Index:**\n📢 {chat_title}\n📨 Total: `{lst}`', reply_markup=IKM(b))
         
     elif idnt == 'start':
         chat, lst, skip, col = d[2], d[3], int(d[4]), d[5]
         chat = int(chat) if str(chat).lstrip('-').isnumeric() else chat
         
-        INDEX_QUEUE.append({'chat': chat, 'lst': int(lst), 'skip': skip, 'col': col, 'msg_chat': q.message.chat.id})
+        # ✅ FIX: अब queue में msg_id भी जा रहा है ताकि उसी मैसेज को एडिट किया जा सके
+        INDEX_QUEUE.append({'chat': chat, 'lst': int(lst), 'skip': skip, 'col': col, 'msg_chat': q.message.chat.id, 'msg_id': q.message.id})
         
         if IS_INDEXING:
             await q.message.edit(f"⏳ **Task Queued!** (Position: `{len(INDEX_QUEUE)}`)\nIt will start automatically when previous is done.")
@@ -182,6 +206,8 @@ async def auto_index(bot, m):
     except Exception as e: return await m.reply(f'❌ Error: {e}')
     if chat.type != enums.ChatType.CHANNEL: return await m.reply("⚠️ Only channels can be indexed.")
     
-    b = [[IKB('⚡ START (Skip 0)', callback_data=f'index#yes#{cid}#{lst}#0')],
-         [IKB('📝 CUSTOM SKIP', callback_data=f'index#ask_skip#{cid}#{lst}')], [IKB('❌ CANCEL', callback_data='close_data')]]
+    b = [
+        [IKB('⚡ START (Skip 0)', callback_data=f'index#yes#{cid}#{lst}#0'), IKB('📝 CUSTOM SKIP', callback_data=f'index#ask_skip#{cid}#{lst}')],
+        [IKB('❌ CANCEL', callback_data='close_data')]
+    ]
     await m.reply(f'🗂️ **Ready to Index:**\n📢 {chat.title}\n📨 Total: `{lst}`', reply_markup=IKM(b))
