@@ -243,12 +243,10 @@ function setCol(el){
   el.classList.add('active');curCol=el.dataset.col;
 }
 function getFid(f){
-  /* f.id अगर API दे तो use करो, नहीं तो watch URL से निकालो (पुराना तरीका) */
   if(f.id) return f.id;
   try{ return f.watch.split('file_id=')[1].split('&')[0]; }catch(e){ return ''; }
 }
 function srcClass(src){
-  /* source badge CSS class — lowercase match करना है */
   if(!src) return 'primary';
   var s=src.toLowerCase();
   if(s==='primary'||s==='cloud'||s==='archive') return s;
@@ -280,7 +278,7 @@ async function doSearch(off){
         '<div class="fc-meta"><span>&#128190; '+f.size+'</span></div></div>'+
         '<div class="fc-actions">'+
         '<a href="'+f.watch+'" target="_blank" class="btn-play">&#9654; Play</a>'+
-        '<button class="btn-edit" onclick="openEdit(\''+fid+'\',\''+f.name.replace(/\'/g,"\\'").replace(/"/g,'&quot;')+'\')"">&#9998; Edit</button>'+
+        '<button class="btn-edit" onclick="openEdit(\''+fid+'\',\''+f.name.replace(/'/g,"\\\\'").replace(/"/g,'&quot;')+'\')">&#9998; Edit</button>'+
         '<button class="btn-del" onclick="deleteFile(\''+fid+'\')">&#10005; Delete</button>'+
         '</div></div>';
     } else {
@@ -424,9 +422,6 @@ async def login_post(request):
 # ---------------------------------------------
 # APIs
 # ---------------------------------------------
-# NOTE: /api/search is handled by search_api.py (search_routes)
-# यहाँ सिर्फ edit और delete हैं
-
 @admin_routes.post('/api/edit_file')
 async def edit_file_api(request):
     if not is_logged_in(request): return web.json_response({"err": "no"}, status=403)
@@ -461,7 +456,6 @@ async def admin_dashboard(request):
         total_u = await user_db.total_users_count()
     except Exception:
         total_u = 0
-    # db_count_documents() may return int or dict &#8212; handle both
     if isinstance(stats, int):
         stats = {'total': stats, 'primary': stats, 'cloud': 0, 'archive': 0}
     p_count = stats.get('primary', 0)
