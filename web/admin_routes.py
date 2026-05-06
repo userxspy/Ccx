@@ -10,7 +10,6 @@ from hydrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 admin_routes = web.RouteTableDef()
 
 def safe_html_response(html: str) -> web.Response:
-    """Surrogate-safe HTML response — future UnicodeEncodeError से बचाता है."""
     clean = html.encode('utf-8', errors='replace').decode('utf-8')
     return web.Response(text=clean, content_type='text/html', charset='utf-8')
 
@@ -20,9 +19,9 @@ def is_logged_in(request):
     return session_id in temp.ADMIN_SESSIONS and time.time() < temp.ADMIN_SESSIONS[session_id]
 
 # ---------------------------------------------
-# SHARED ASSETS (injected into every page)
+# SHARED ASSETS
 # ---------------------------------------------
-SHARED_HEAD = """
+SHARED_HEAD = r"""
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -61,7 +60,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .sidebar-overlay.open{opacity:1;pointer-events:all}
 .sidebar{position:fixed;top:0;left:0;height:100%;width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);z-index:160;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
 .sidebar.open{transform:translateX(0)}
-
 .sb-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .sb-logo{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.08em;display:flex;align-items:center;gap:7px}
 .sb-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:4px;border-radius:5px;transition:all .15s}
@@ -118,7 +116,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .file-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;margin-bottom:10px;transition:border-color .2s,transform .15s,background .25s,opacity .3s;animation:slideIn .18s ease both}
 @keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .file-card:hover{border-color:rgba(95,255,176,.25);transform:translateY(-1px)}
-.file-card.deleting{opacity:0;transform:scale(.97)}
 .fc-top{display:flex;align-items:center;gap:7px;margin-bottom:8px;flex-wrap:wrap}
 .source-badge{font-family:'Space Mono',monospace;font-size:10px;padding:2px 8px;border-radius:4px;letter-spacing:.04em}
 .source-badge.primary{background:rgba(95,255,176,.1);color:#5fffb0;border:1px solid rgba(95,255,176,.25)}
@@ -127,15 +124,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .type-tag{font-size:11px;color:var(--muted);background:var(--bg4);padding:2px 7px;border-radius:4px;transition:background .25s}
 .fc-name{font-size:14px;font-weight:500;line-height:1.4;margin-bottom:6px;word-break:break-word}
 .fc-meta{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
-.fc-actions{display:flex;flex-direction:column;gap:6px;min-width:88px}
-.btn-play{background:rgba(95,255,176,.1);border:1px solid rgba(95,255,176,.3);color:#5fffb0;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;display:block;font-family:'DM Sans',sans-serif;transition:background .15s}
+.fc-actions{display:flex;flex-direction:column;gap:6px;min-width:88px; justify-content:center;}
+.btn-play{background:rgba(95,255,176,.1);border:1px solid rgba(95,255,176,.3);color:#5fffb0;border-radius:7px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;display:block;font-family:'DM Sans',sans-serif;transition:background .15s}
 .btn-play:hover{background:rgba(95,255,176,.2)}
-.btn-edit,.btn-del{border-radius:7px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;width:100%;text-align:center;transition:background .15s}
-.btn-edit{background:var(--bg4);color:var(--text);border:1px solid var(--border)}
-.btn-edit:hover{background:var(--bg3)}
-.btn-del{background:rgba(255,107,107,.1);color:#ff6b6b;border:1px solid rgba(255,107,107,.25)}
-.btn-del:hover{background:rgba(255,107,107,.2)}
-.fc-actions.pub{min-width:72px}
 
 /* EMPTY */
 .empty{text-align:center;padding:56px 20px;color:var(--muted)}
@@ -148,18 +139,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .pg-btn:hover{border-color:var(--accent)}
 .pg-btn:disabled{opacity:.3;cursor:not-allowed}
 .pg-info{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
-
-/* MODAL */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;align-items:center;justify-content:center}
-.modal-overlay.open{display:flex}
-.modal{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:24px;width:90%;max-width:380px;transition:background .25s}
-.modal h3{font-size:15px;font-weight:500;margin-bottom:16px}
-.modal-label{font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;font-family:'Space Mono',monospace;display:block;margin-bottom:6px}
-.modal-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:14px;transition:border .2s,background .25s}
-.modal-input:focus{border-color:rgba(95,255,176,.4)}
-.modal-btns{display:flex;gap:8px}
-.modal-save{flex:1;background:var(--accent);color:#08090d;border:none;border-radius:8px;padding:10px;font-weight:600;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
-.modal-cancel{flex:1;background:var(--bg4);color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
 
 /* TOAST */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;z-index:300;transform:translateX(130%);transition:transform .25s;pointer-events:none;box-shadow:0 4px 20px var(--shadow)}
@@ -181,9 +160,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .login-card .submit-btn:hover{opacity:.85}
 .err-box{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);color:#ff6b6b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px}
 .theme-corner{position:fixed;top:14px;right:16px;z-index:10}
-</style>"""
+</style>
+"""
 
-THEME_JS = """<script>
+THEME_JS = r"""<script>
 (function(){if(localStorage.getItem('theme')==='light')document.body.classList.add('light')})();
 function toggleTheme(){
   var l=document.body.classList.toggle('light');
@@ -200,7 +180,7 @@ function initThemeBtn(){
 }
 </script>"""
 
-SIDEBAR_HTML = """
+SIDEBAR_HTML = r"""
 <div class="sidebar-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
 <div class="sidebar" id="sidebar">
   <div class="sb-header">
@@ -212,16 +192,13 @@ SIDEBAR_HTML = """
     <a href="/dashboard" class="sb-link {active_dash}">
       <span class="sb-icon">&#8862;</span> Dashboard <span class="sb-arrow">&#8250;</span>
     </a>
-    <a href="/search" class="sb-link {active_search}">
-      <span class="sb-icon">&#8981;</span> Search Files <span class="sb-arrow">&#8250;</span>
-    </a>
   </nav>
   <div class="sb-footer">
     <a href="/logout" class="sb-logout"><span class="sb-icon">&#9003;</span> Logout</a>
   </div>
 </div>"""
 
-SIDEBAR_JS = """<script>
+SIDEBAR_JS = r"""<script>
 function openSidebar(){
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sbOverlay').classList.add('open');
@@ -234,88 +211,68 @@ function closeSidebar(){
 }
 </script>"""
 
-SEARCH_JS = """<script>
-var curQ='',curOff=0,nextOff='',curCol='all',curPage=1,isAdmin=false;
+SEARCH_JS = r"""<script>
+var curQ='',curOff=0,nextOff='',curCol='all',curPage=1;
 function setCol(el){
   document.querySelectorAll('.ftab').forEach(function(t){t.classList.remove('active')});
   el.classList.add('active');curCol=el.dataset.col;
 }
-function getFid(f){
-  if(f.id) return f.id;
-  try{ return f.watch.split('file_id=')[1].split('&')[0]; }catch(e){ return ''; }
-}
+
 function srcClass(src){
   if(!src) return 'primary';
   var s=src.toLowerCase();
   if(s==='primary'||s==='cloud'||s==='archive') return s;
   return 'primary';
 }
+
 async function doSearch(off){
   var q=document.getElementById('q').value.trim();
   if(!q){showToast('Search term daalen','error');return;}
   curQ=q;curOff=off;if(off===0)curPage=1;
-  var res=await fetch('/api/search?q='+encodeURIComponent(q)+'&offset='+off+'&col='+curCol);
-  if(!res.ok){showToast('API Error: '+res.status,'error');return;}
-  var data=await res.json();
-  if(data.error){showToast(data.error,'error');return;}
-  document.getElementById('resInfo').style.display='flex';
-  document.getElementById('resCount').textContent=data.total.toLocaleString()+' result'+(data.total!==1?'s':'')+' \u2014 "'+q+'"';
-  if(!data.results||!data.results.length){
-    document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">\u25c8</div><p>No files found in <b>'+curCol+'</b> for \u201c'+q+'\u201d</p></div>';
-    document.getElementById('pageBox').style.display='none';return;
+  
+  try {
+      var res=await fetch('/api/search?q='+encodeURIComponent(q)+'&offset='+off+'&col='+curCol);
+      if(!res.ok){showToast('API Error: '+res.status,'error');return;}
+      
+      var data=await res.json();
+      if(data.error){showToast(data.error,'error');return;}
+      
+      document.getElementById('resInfo').style.display='flex';
+      document.getElementById('resCount').textContent=data.total.toLocaleString()+' result'+(data.total!==1?'s':'')+' \u2014 "'+q+'"';
+      
+      if(!data.results||!data.results.length){
+        document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">\u25c8</div><p>No files found in <b>'+curCol+'</b> for \u201c'+q+'\u201d</p></div>';
+        document.getElementById('pageBox').style.display='none';return;
+      }
+      
+      var html='';
+      data.results.forEach(function(f,i){
+        var sc=srcClass(f.source);
+        var d=(i*.04)+'s';
+        
+        html += '<div class="file-card" style="animation-delay:' + d + '">' +
+            '<div><div class="fc-top"><span class="source-badge ' + sc + '">' + sc.toUpperCase() + '</span><span class="type-tag">' + f.type + '</span></div>' +
+            '<div class="fc-name">' + f.name + '</div>' +
+            '<div class="fc-meta"><span>&#128190; ' + f.size + '</span></div></div>' +
+            '<div class="fc-actions pub"><a href="' + f.watch + '" target="_blank" class="btn-play">&#9654; Stream/Play</a></div>' +
+            '</div>';
+      });
+      
+      document.getElementById('results').innerHTML=html;
+      nextOff=data.next_offset;
+      document.getElementById('pageBox').style.display='flex';
+      document.getElementById('pBtn').disabled=(off===0);
+      document.getElementById('nBtn').disabled=!nextOff;
+      document.getElementById('pgInfo').textContent='Page '+curPage;
+      
+  } catch(e) {
+      showToast('Network error','error');
   }
-  var html='';
-  data.results.forEach(function(f,i){
-    var fid=getFid(f);
-    var sc=srcClass(f.source);
-    var d=(i*.04)+'s';
-    if(isAdmin){
-      html+='<div class="file-card" id="row-'+fid+'" style="animation-delay:'+d+'">'+
-        '<div><div class="fc-top"><span class="source-badge '+sc+'">'+sc.toUpperCase()+'</span><span class="type-tag">'+f.type+'</span></div>'+
-        '<div class="fc-name">'+f.name+'</div>'+
-        '<div class="fc-meta"><span>&#128190; '+f.size+'</span></div></div>'+
-        '<div class="fc-actions">'+
-        '<a href="'+f.watch+'" target="_blank" class="btn-play">&#9654; Play</a>'+
-        '<button class="btn-edit" onclick="openEdit(\''+fid+'\',\''+f.name.replace(/\'/g,"\\'").replace(/"/g,'&quot;')+'\')">&#9998; Edit</button>'+
-        '<button class="btn-del" onclick="deleteFile(\''+fid+'\')">&#10005; Delete</button>'+
-        '</div></div>';
-    } else {
-      html+='<div class="file-card" style="animation-delay:'+d+'">'+
-        '<div><div class="fc-top"><span class="source-badge '+sc+'">'+sc.toUpperCase()+'</span><span class="type-tag">'+f.type+'</span></div>'+
-        '<div class="fc-name">'+f.name+'</div>'+
-        '<div class="fc-meta"><span>&#128190; '+f.size+'</span></div></div>'+
-        '<div class="fc-actions pub"><a href="'+f.watch+'" target="_blank" class="btn-play">&#9654; Play</a></div>'+
-        '</div>';
-    }
-  });
-  document.getElementById('results').innerHTML=html;
-  nextOff=data.next_offset;
-  document.getElementById('pageBox').style.display='flex';
-  document.getElementById('pBtn').disabled=off===0;
-  document.getElementById('nBtn').disabled=!nextOff;
-  document.getElementById('pgInfo').textContent='Page '+curPage;
 }
+
 function next(){if(nextOff){curPage++;doSearch(nextOff);scrollTo(0,0);}}
 function prev(){if(curPage>1){curPage--;doSearch(Math.max(0,curOff-20));scrollTo(0,0);}}
-function openEdit(id,name){document.getElementById('editFid').value=id;document.getElementById('newName').value=name;document.getElementById('editModal').classList.add('open');}
-function closeModal(){document.getElementById('editModal').classList.remove('open');}
-async function saveEdit(){
-  var id=document.getElementById('editFid').value;
-  var name=document.getElementById('newName').value.trim();
-  if(!name)return;
-  var res=await fetch('/api/edit_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,name:name})});
-  var data=await res.json();
-  if(data.status==='success'){var el=document.querySelector('#row-'+id+' .fc-name');if(el)el.textContent=name;closeModal();showToast('File name updated');}
-  else showToast('Update failed','error');
-}
-async function deleteFile(id){
-  if(!confirm('Delete this file permanently?'))return;
-  var card=document.getElementById('row-'+id);
-  card.classList.add('deleting');
-  var res=await fetch('/api/delete_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
-  var data=await res.json();
-  setTimeout(function(){if(data.status==='success')card.remove();else{card.classList.remove('deleting');showToast('Delete failed','error');}},300);
-}
+
 var _tt;
 function showToast(msg,type){
   type=type||'success';
@@ -323,18 +280,17 @@ function showToast(msg,type){
   t.textContent=(type==='success'?'\u2713  ':' ')+msg;t.className='toast '+type+' show';
   clearTimeout(_tt);_tt=setTimeout(function(){t.classList.remove('show');},2800);
 }
+
 document.addEventListener('DOMContentLoaded',function(){
-  initThemeBtn();
-  var em=document.getElementById('editModal');
-  if(em)em.addEventListener('click',function(e){if(e.target===this)closeModal();});
-  document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Enter')doSearch(0);});
+  if(typeof initThemeBtn === 'function') initThemeBtn();
+  var qInput = document.getElementById('q');
+  if(qInput) qInput.addEventListener('keydown',function(e){if(e.key==='Enter')doSearch(0);});
 });
 </script>"""
 
 def topbar_html(active):
     active_dash = 'active' if active == 'dashboard' else ''
-    active_search = 'active' if active == 'search' else ''
-    sidebar = SIDEBAR_HTML.replace('{active_dash}', active_dash).replace('{active_search}', active_search)
+    sidebar = SIDEBAR_HTML.replace('{active_dash}', active_dash)
     return f"""
 {sidebar}
 <div class="topbar">
@@ -418,29 +374,6 @@ async def login_post(request):
     return safe_html_response(html)
 
 # ---------------------------------------------
-# APIs
-# ---------------------------------------------
-@admin_routes.post('/api/edit_file')
-async def edit_file_api(request):
-    if not is_logged_in(request): return web.json_response({"err": "no"}, status=403)
-    data = await request.json()
-    fid, name = data.get('id'), data.get('name')
-    for col in COLLECTIONS.values():
-        res = await col.update_one({"_id": fid}, {"$set": {"file_name": name}})
-        if res.modified_count > 0: return web.json_response({"status": "success"})
-    return web.json_response({"status": "fail"})
-
-@admin_routes.post('/api/delete_file')
-async def delete_file_api(request):
-    if not is_logged_in(request): return web.json_response({"err": "no"}, status=403)
-    data = await request.json()
-    fid = data.get('id')
-    for col in COLLECTIONS.values():
-        res = await col.delete_one({"_id": fid})
-        if res.deleted_count > 0: return web.json_response({"status": "success"})
-    return web.json_response({"status": "fail"})
-
-# ---------------------------------------------
 # DASHBOARD (login required)
 # ---------------------------------------------
 @admin_routes.get('/dashboard')
@@ -476,7 +409,7 @@ async def admin_dashboard(request):
     </div>
     <div class="search-wrap">
       <span class="s-icon">&#9906;</span>
-      <input class="search-input" id="q" placeholder="Search files to manage&#8230;">
+      <input class="search-input" id="q" placeholder="Movie name, series, quality&#8230;">
     </div>
     <button class="search-btn" onclick="doSearch(0)">Search</button>
   </div>
@@ -488,79 +421,25 @@ async def admin_dashboard(request):
     <div class="scard amber"><div class="scard-label">Archive</div><div class="scard-val">{a_count:,}</div><div class="scard-sub">Backup files</div></div>
     <div class="scard red"><div class="scard-label">Users</div><div class="scard-val">{total_u:,}</div><div class="scard-sub">Total registered</div></div>
   </div>
+  
   <div class="results-info" id="resInfo">
     <span class="results-count" id="resCount"></span>
-    <span class="results-hint">Edit or delete below</span>
+    <span class="results-hint">Click Play to stream file</span>
   </div>
-  <div id="results">
-    <div class="empty"><div class="empty-icon">&#9672;</div><p>Search files above to view, edit or delete them</p></div>
-  </div>
-  <div class="pagination" id="pageBox">
-    <button class="pg-btn" id="pBtn" onclick="prev()" disabled>&#8592; Previous</button>
-    <span class="pg-info" id="pgInfo">Page 1</span>
-    <button class="pg-btn" id="nBtn" onclick="next()">Next &#8594;</button>
-  </div>
-</div>
-<div class="modal-overlay" id="editModal">
-  <div class="modal">
-    <h3>Edit file name</h3>
-    <label class="modal-label">New name</label>
-    <input class="modal-input" type="text" id="newName">
-    <input type="hidden" id="editFid">
-    <div class="modal-btns">
-      <button class="modal-save" onclick="saveEdit()">Save changes</button>
-      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
-    </div>
-  </div>
-</div>
-<div class="toast" id="toast"></div>
-{SEARCH_JS}
-<script>isAdmin=true;</script>
-</body></html>"""
-    return safe_html_response(html)
-
-# ---------------------------------------------
-# SEARCH PAGE (login required)
-# ---------------------------------------------
-@admin_routes.get('/search')
-async def search_page(request):
-    if not is_logged_in(request): return web.HTTPFound('/admin')
-    html = f"""<!DOCTYPE html><html><head><title>Search Files</title>{SHARED_HEAD}{THEME_JS}</head><body>
-{topbar_html('search')}
-{SIDEBAR_JS}
-<div class="search-zone">
-  <div class="search-row">
-    <div class="filter-tabs">
-      <button class="ftab active" data-col="all" onclick="setCol(this)">All</button>
-      <button class="ftab" data-col="primary" onclick="setCol(this)">Primary</button>
-      <button class="ftab" data-col="cloud" onclick="setCol(this)">Cloud</button>
-      <button class="ftab" data-col="archive" onclick="setCol(this)">Archive</button>
-    </div>
-    <div class="search-wrap">
-      <span class="s-icon">&#8981;</span>
-      <input class="search-input" id="q" placeholder="Movie name, series, quality&#8230;">
-    </div>
-    <button class="search-btn" onclick="doSearch(0)">Search</button>
-  </div>
-</div>
-<div class="main">
-  <div class="results-info" id="resInfo">
-    <span class="results-count" id="resCount"></span>
-    <span class="results-hint">Click Play to stream</span>
-  </div>
+  
   <div id="results">
     <div class="empty"><div class="empty-icon">&#9672;</div><p>Type a movie or series name above<br>and press Search</p></div>
   </div>
+  
   <div class="pagination" id="pageBox">
     <button class="pg-btn" id="pBtn" onclick="prev()" disabled>&#8592; Previous</button>
     <span class="pg-info" id="pgInfo">Page 1</span>
     <button class="pg-btn" id="nBtn" onclick="next()">Next &#8594;</button>
   </div>
 </div>
+
 <div class="toast" id="toast"></div>
-<div id="editModal" style="display:none"></div>
 {SEARCH_JS}
-<script>isAdmin=false;</script>
 </body></html>"""
     return safe_html_response(html)
 
