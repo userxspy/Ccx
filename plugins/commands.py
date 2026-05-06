@@ -59,7 +59,7 @@ async def start(client, message):
         await db.add_user(message.from_user.id, message.from_user.first_name)
         await client.send_message(LOG_CHANNEL, script.NEW_USER_TXT.format(message.from_user.mention, message.from_user.id))
 
-    # ✅ Premium Check
+    # ✅ Premium Check (Admins Bypass)
     if IS_PREMIUM and message.from_user.id not in ADMINS and not await is_premium(message.from_user.id, client):
         return await message.reply_photo(
             random.choice(PICS), caption="🔒 **Premium Required**\n\nBot is only for Premium users.\nUse /plan to buy.",
@@ -79,7 +79,9 @@ async def start(client, message):
                 if not file: return await message.reply("❌ File Not Found!")
                 
                 settings = await get_settings(grp_id)
-                caption = settings.get('caption', '{file_name}\n\n💾 Size: {file_size}').replace('{file_name}', str(file.get('file_name', 'File'))).replace('{file_size}', get_size(file.get('file_size', 0))).replace('{file_caption}', str(file.get('caption', '')))
+                # ✅ प्रोफेशनल तरीका: Script.py से FILE_CAPTION ले रहा है
+                cap_template = settings.get('caption', script.FILE_CAPTION)
+                caption = cap_template.format(file_name=str(file.get('file_name', 'File')), file_size=get_size(file.get('file_size', 0)))
                 
                 btn = [[InlineKeyboardButton('❌ Close', callback_data=f'close_{message.from_user.id}')]]
                 if IS_STREAM: btn.insert(0, [InlineKeyboardButton("▶️ Watch / Download", callback_data=f"stream#{file_id}")])
@@ -95,13 +97,17 @@ async def start(client, message):
         except Exception as e: print(f"Start Error: {e}")
 
     # 4. DEFAULT START MESSAGE
+    btn = [
+        [InlineKeyboardButton("+ Add to Group +", url=f"https://t.me/{temp.U_NAME}?startgroup=start")],
+        [InlineKeyboardButton("👨‍🚒 Help", callback_data="help"), InlineKeyboardButton("📊 Stats", callback_data="stats")]
+    ]
+    # ✅ FIX: एडमिन को Premium Status बटन नहीं दिखेगा
+    if message.from_user.id not in ADMINS:
+        btn.append([InlineKeyboardButton("💎 Premium Status", callback_data="myplan")])
+
     await message.reply_photo(
         random.choice(PICS), caption=script.START_TXT.format(message.from_user.mention, get_wish()),
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("+ Add to Group +", url=f"https://t.me/{temp.U_NAME}?startgroup=start")],
-            [InlineKeyboardButton("👨‍🚒 Help", callback_data="help"), InlineKeyboardButton("📚 About", callback_data="about")],
-            [InlineKeyboardButton("💎 Premium Status", callback_data="myplan")]
-        ])
+        reply_markup=InlineKeyboardMarkup(btn)
     )
 
 # ─────────────────────────
@@ -167,9 +173,9 @@ async def link_generator(client, message):
     except Exception as e: await msg.edit_text(f"❌ **Error generating link:** `{e}`")
 
 # ─────────────────────────
-# 🎨 SMART UI CALLBACKS (MERGED FOR OPTIMIZATION)
+# 🎨 SMART UI CALLBACKS
 # ─────────────────────────
-@Client.on_callback_query(filters.regex(r"^(help|user_cmds|admin_cmds|about|back_start)$"))
+@Client.on_callback_query(filters.regex(r"^(help|user_cmds|admin_cmds|stats|back_start)$"))
 async def ui_cb(client, query):
     data = query.data
     
@@ -177,23 +183,33 @@ async def ui_cb(client, query):
         text = script.START_TXT.format(query.from_user.mention, get_wish())
         btn = [
             [InlineKeyboardButton("+ Add to Group +", url=f"https://t.me/{temp.U_NAME}?startgroup=start")],
-            [InlineKeyboardButton("👨‍🚒 Help", callback_data="help"), InlineKeyboardButton("📚 About", callback_data="about")],
-            [InlineKeyboardButton("💎 Premium Status", callback_data="myplan")]
+            [InlineKeyboardButton("👨‍🚒 Help", callback_data="help"), InlineKeyboardButton("📊 Stats", callback_data="stats")]
         ]
+        # ✅ FIX: एडमिन को Premium Status नहीं दिखेगा
+        if query.from_user.id not in ADMINS:
+            btn.append([InlineKeyboardButton("💎 Premium Status", callback_data="myplan")])
+
     elif data == "help":
         text = script.HELP_TXT.format(query.from_user.mention)
         btn = [[InlineKeyboardButton("👨‍💻 User Commands", callback_data="user_cmds")]]
         if query.from_user.id in ADMINS: btn[0].append(InlineKeyboardButton("👮‍♂️ Admin Commands", callback_data="admin_cmds"))
         btn.append([InlineKeyboardButton("⬅️ Back", callback_data="back_start")])
+        
     elif data == "user_cmds":
         text = script.USER_COMMAND_TXT
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="help")]]
+        
     elif data == "admin_cmds":
         if query.from_user.id not in ADMINS: return await query.answer("❌ You are not an Admin!", show_alert=True)
         text = script.ADMIN_COMMAND_TXT
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="help")]]
-    elif data == "about":
-        text = script.MY_ABOUT_TXT
+        
+    # ✅ FIX: About को हटाकर Stats लगा दिया गया
+    elif data == "stats":
+        files, users, chats, premium = await asyncio.gather(
+            db_count_documents(), db.total_users_count(), db.total_chat_count(), db.premium.count_documents({"status.premium": True})
+        )
+        text = script.STATUS_TXT.format(users, chats, premium, files['total'], files['primary'], files['cloud'], files['archive'], get_readable_time(time_now() - temp.START_TIME))
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="back_start")]]
 
     await query.message.edit_caption(caption=text, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
@@ -208,24 +224,6 @@ async def confirm_del(client, query):
     await query.message.edit("🗑 Processing... This may take time.")
     count = await delete_files("*", storage)
     await query.message.edit(f"✅ Deleted `{count}` files from `{storage}`.")
-
-@Client.on_callback_query(filters.regex("^myplan$"))
-async def myplan_cb(client, query):
-    if not IS_PREMIUM: return await query.answer("Premium disabled.", show_alert=True)
-    mp = await db.get_plan(query.from_user.id)
-    btn = [[InlineKeyboardButton("⬅️ Back", callback_data="back_start")]]
-    
-    if not mp.get('premium'):
-        btn.insert(0, [InlineKeyboardButton('💎 Buy Premium', callback_data='activate_plan')])
-        return await query.message.edit_caption("❌ No active plan.", reply_markup=InlineKeyboardMarkup(btn))
-    
-    expire = mp.get('expire')
-    if isinstance(expire, str):
-        try: expire = datetime.strptime(expire, "%Y-%m-%d %H:%M:%S")
-        except: expire = None
-        
-    left = f"{(expire - datetime.now()).days} days, {(expire - datetime.now()).seconds//3600} hours" if expire else "Unknown"
-    await query.message.edit_caption(f"💎 <b>Premium Status</b>\n\n📦 Plan: {mp.get('plan')}\n⏳ Expires: {expire}\n⏱ Left: {left}\n\nUse /plan to extend.", reply_markup=InlineKeyboardMarkup(btn))
 
 @Client.on_callback_query(filters.regex(r"^stream#"))
 async def stream_cb(client, query):
