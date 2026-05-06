@@ -15,7 +15,7 @@ db = AsyncIOMotorClient(
 )[DATABASE_NAME]
 
 COLLECTIONS = {"primary": db.Primary, "cloud": db.Cloud, "archive": db.Archive}
-COLS = COLLECTIONS  # ✅ FIX: इससे वेब डैशबोर्ड और अंदर का कोड दोनों काम करेंगे
+COLS = COLLECTIONS  
 
 async def ensure_indexes():
     for n, c in COLS.items():
@@ -33,7 +33,8 @@ async def db_count_documents():
 # ─────────────────────────────────────────────────────────
 # 💾 SAVE & UTILS
 # ─────────────────────────────────────────────────────────
-async def save_file(media, col_type="primary"):
+# ✅ FIX: Changed col_type back to collection_type
+async def save_file(media, collection_type="primary"):
     try:
         fid = unpack_new_file_id(media.file_id)
         if not fid: return "err"
@@ -43,7 +44,7 @@ async def save_file(media, col_type="primary"):
             "_id": fid, "file_ref": media.file_id, "file_name": clean(media.file_name), 
             "file_size": media.file_size, "caption": clean(media.caption), "file_type": type(media).__name__.lower()
         }
-        res = await COLS.get(col_type, COLS["primary"]).replace_one({"_id": fid}, doc, upsert=True)
+        res = await COLS.get(collection_type, COLS["primary"]).replace_one({"_id": fid}, doc, upsert=True)
         return "dup" if res.matched_count > 0 else "suc"
     except Exception as e:
         logger.error(f"save_file err: {e}"); return "err"
@@ -76,11 +77,12 @@ async def _search(col, q: str, regex, off: int, lim: int, lang=None):
     for d in docs: d["file_id"] = d["_id"]
     return docs, cnt
 
-async def get_search_results(q, lim=MAX_BTN, off=0, lang=None, col_type="primary"):
-    if not q: return [], "", 0, col_type
+# ✅ FIX: Changed col_type back to collection_type
+async def get_search_results(q, lim=MAX_BTN, off=0, lang=None, collection_type="primary"):
+    if not q: return [], "", 0, collection_type
     rq, reg = str(q).strip(), _build_regex(str(q).strip())
     
-    targets = [("primary", COLS["primary"]), ("cloud", COLS["cloud"]), ("archive", COLS["archive"])] if col_type == "all" else [(col_type, COLS.get(col_type, COLS["primary"]))]
+    targets = [("primary", COLS["primary"]), ("cloud", COLS["cloud"]), ("archive", COLS["archive"])] if collection_type == "all" else [(collection_type, COLS.get(collection_type, COLS["primary"]))]
     
     for name, col in targets:
         docs, cnt = await _search(col, rq, reg, off, lim, lang)
@@ -107,8 +109,9 @@ async def get_web_search_results(q, off=0, lim=20):
 # ─────────────────────────────────────────────────────────
 # 🗑 DELETE & DETAILS
 # ─────────────────────────────────────────────────────────
-async def delete_files(q, col_type="all"):
-    cols = COLS.values() if col_type == "all" else [COLS.get(col_type, COLS["primary"])]
+# ✅ FIX: Changed col_type back to collection_type
+async def delete_files(q, collection_type="all"):
+    cols = COLS.values() if collection_type == "all" else [COLS.get(collection_type, COLS["primary"])]
     try:
         flt = {} if q == "*" else {"file_name": _build_regex(str(q))}
         return sum((r.deleted_count for r in await asyncio.gather(*(c.delete_many(flt) for c in cols))))
