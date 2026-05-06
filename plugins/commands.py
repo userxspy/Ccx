@@ -212,7 +212,11 @@ async def ui_cb(client, query):
         text = script.STATUS_TXT.format(users, chats, premium, files['total'], files['primary'], files['cloud'], files['archive'], get_readable_time(time_now() - temp.START_TIME))
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="back_start")]]
 
-    await query.message.edit_caption(caption=text, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+    # ✅ FIX: यहाँ से disable_web_page_preview=True हटा दिया गया है ताकि TypeError ना आए
+    await query.message.edit_caption(
+        caption=text, 
+        reply_markup=InlineKeyboardMarkup(btn)
+    )
 
 # ─────────────────────────
 # OTHER CALLBACKS
