@@ -45,7 +45,8 @@ async def pm_search(client, message):
     if not await is_valid_search(message):
         return
 
-    if IS_PREMIUM and not await is_premium(message.from_user.id, client):
+    # ✅ FIX: Premium Check (Admins Bypass)
+    if IS_PREMIUM and message.from_user.id not in ADMINS and not await is_premium(message.from_user.id, client):
         return await message.reply_photo(
             random.choice(PICS),
             caption="🔒 **Premium Required**\n\nOnly Premium users can use this bot in DM.",
@@ -72,7 +73,8 @@ async def group_search(client, message):
     if not settings.get("search_enabled", True):
         return
 
-    if IS_PREMIUM and not await is_premium(user_id, client):
+    # ✅ FIX: Premium Check (Admins Bypass)
+    if IS_PREMIUM and user_id not in ADMINS and not await is_premium(user_id, client):
         return
 
     text_lower = message.text.lower()
@@ -163,6 +165,7 @@ async def auto_filter(client, msg, collection_type="all"):
     btn = []
     act_src_short = SRC_TO_SHORT.get(actual_source, "pri")
     
+    # ✅ SEND ALL LOGIC (1/1 Button Removed when results are less than MAX_BTN)
     if total <= MAX_BTN:
         btn.append([InlineKeyboardButton("📤 Send All", callback_data=f"sendall_{msg.from_user.id}_{key}_{act_src_short}")])
     else:
@@ -196,7 +199,7 @@ async def auto_delete_msg(bot_msg, user_msg):
     except: pass
 
 # ─────────────────────────────────────────────
-# 📤 SEND ALL HANDLER (With Stream Buttons)
+# 📤 SEND ALL HANDLER
 # ─────────────────────────────────────────────
 @Client.on_callback_query(filters.regex(r"^sendall_"))
 async def send_all_handler(client, query):
@@ -207,7 +210,8 @@ async def send_all_handler(client, query):
     except:
         return await query.answer("❌ Error!", show_alert=True)
 
-    if IS_PREMIUM and not await is_premium(query.from_user.id, client):
+    # ✅ FIX: Premium Check (Admins Bypass)
+    if IS_PREMIUM and query.from_user.id not in ADMINS and not await is_premium(query.from_user.id, client):
         return await query.answer("❌ Premium Expired!", show_alert=True)
 
     files = temp.FILES.get(key)
@@ -227,7 +231,6 @@ async def send_all_handler(client, query):
             caption = cap_template.replace('{file_name}', str(file.get('file_name', 'File')))\
                                   .replace('{file_size}', get_size(file.get('file_size', 0)))
             
-            # ✅ Watch/Download Button Logic
             btn = [[InlineKeyboardButton('❌ Close', callback_data=f'close_{query.from_user.id}')]]
             if IS_STREAM:
                 btn.insert(0, [InlineKeyboardButton("▶️ Watch / Download", callback_data=f"stream#{target_id}")])
@@ -260,7 +263,8 @@ async def nav_handler(client, query):
     except:
         return await query.answer("❌ Error!", show_alert=True)
 
-    if IS_PREMIUM and not await is_premium(query.from_user.id, client):
+    # ✅ FIX: Premium Check (Admins Bypass)
+    if IS_PREMIUM and query.from_user.id not in ADMINS and not await is_premium(query.from_user.id, client):
         return await query.answer("❌ Premium Expired!", show_alert=True)
 
     search = BUTTONS.get(key)
@@ -334,7 +338,8 @@ async def coll_handler(client, query):
     except:
         return
 
-    if IS_PREMIUM and not await is_premium(query.from_user.id, client):
+    # ✅ FIX: Premium Check (Admins Bypass)
+    if IS_PREMIUM and query.from_user.id not in ADMINS and not await is_premium(query.from_user.id, client):
         return await query.answer("❌ Premium Expired!", show_alert=True)
 
     search = BUTTONS.get(key)
@@ -370,6 +375,7 @@ async def coll_handler(client, query):
     btn = []
     act_src_short = SRC_TO_SHORT.get(act_src, "pri")
 
+    # ✅ SEND ALL LOGIC (Collection change करते वक्त भी 1/1 हटाकर Send All लाएगा)
     if total <= MAX_BTN:
         btn.append([InlineKeyboardButton("📤 Send All", callback_data=f"sendall_{req}_{key}_{act_src_short}")])
     else:
