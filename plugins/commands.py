@@ -200,19 +200,36 @@ async def ui_cb(client, query):
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="help")]]
         
     elif data == "admin_cmds":
+        # 🔒 Security Check
         if query.from_user.id not in ADMINS: return await query.answer("❌ You are not an Admin!", show_alert=True)
         text = script.ADMIN_COMMAND_TXT
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="help")]]
         
-    # ✅ FIX: About को हटाकर Stats लगा दिया गया
     elif data == "stats":
-        files, users, chats, premium = await asyncio.gather(
-            db_count_documents(), db.total_users_count(), db.total_chat_count(), db.premium.count_documents({"status.premium": True})
-        )
-        text = script.STATUS_TXT.format(users, chats, premium, files['total'], files['primary'], files['cloud'], files['archive'], get_readable_time(time_now() - temp.START_TIME))
+        files = await db_count_documents()
+        uptime = get_readable_time(time_now() - temp.START_TIME)
+
+        # 🔒 Security Check: Admin को पूरा Stats दिखेगा, Premium User को सिर्फ Files और Uptime
+        if query.from_user.id in ADMINS:
+            users, chats, premium = await asyncio.gather(
+                db.total_users_count(), 
+                db.total_chat_count(), 
+                db.premium.count_documents({"status.premium": True})
+            )
+            text = script.STATUS_TXT.format(
+                users, chats, premium, 
+                files['total'], files['primary'], files['cloud'], files['archive'], 
+                uptime
+            )
+        else:
+            # ✅ प्रीमियम यूजर के लिए Script.py वाला USER_STATUS_TXT इस्तेमाल होगा
+            text = script.USER_STATUS_TXT.format(
+                files['total'], files['primary'], files['cloud'], files['archive'], 
+                uptime
+            )
+        
         btn = [[InlineKeyboardButton("⬅️ Back", callback_data="back_start")]]
 
-    # ✅ FIX: यहाँ से disable_web_page_preview=True हटा दिया गया है ताकि TypeError ना आए
     await query.message.edit_caption(
         caption=text, 
         reply_markup=InlineKeyboardMarkup(btn)
@@ -223,7 +240,9 @@ async def ui_cb(client, query):
 # ─────────────────────────
 @Client.on_callback_query(filters.regex(r"^confirm_del#"))
 async def confirm_del(client, query):
+    # 🔒 Security Check
     if query.from_user.id not in ADMINS: return await query.answer("❌ You are not an Admin!", show_alert=True)
+    
     storage = query.data.split("#")[1]
     await query.message.edit("🗑 Processing... This may take time.")
     count = await delete_files("*", storage)
@@ -241,6 +260,10 @@ async def stream_cb(client, query):
 
 @Client.on_callback_query(filters.regex(r"^logout_"))
 async def web_logout_callback(client, query):
+    # 🔒 Security Check: कोई और यूज़र एडमिन का वेब सेशन बंद नहीं कर सकता
+    if query.from_user.id not in ADMINS: 
+        return await query.answer("❌ You are not authorized!", show_alert=True)
+
     session_id = query.data.split("_")[1]
     if hasattr(temp, 'ADMIN_SESSIONS') and session_id in temp.ADMIN_SESSIONS:
         del temp.ADMIN_SESSIONS[session_id]
@@ -254,8 +277,10 @@ async def web_logout_callback(client, query):
 async def close_cb(c, q):
     try:
         parts = q.data.split("_")
+        # 🔒 Security Check: सिर्फ वही यूज़र क्लोज कर सकता है जिसने रिक्वेस्ट की थी
         if len(parts) > 1 and parts[1].isdigit() and int(parts[1]) != q.from_user.id:
             return await q.answer("❌ You cannot close this!", show_alert=True)
+        
         await q.message.delete()
         if hasattr(temp, 'PM_FILES') and q.message.id in temp.PM_FILES:
             try:
