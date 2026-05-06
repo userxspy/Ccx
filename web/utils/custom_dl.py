@@ -1,207 +1,82 @@
 import math
-from typing import Union
-from hydrogram.types import Message
-from utils import temp
 from hydrogram import Client, utils, raw
+from hydrogram.types import Message
 from hydrogram.session import Session, Auth
 from hydrogram.errors import AuthBytesInvalid
 from hydrogram.file_id import FileId, FileType, ThumbnailSource
+from utils import temp
 
-
-async def chunk_size(length):
-    return 2 ** max(min(math.ceil(math.log2(length / 1024)), 10), 2) * 1024
-
-
-async def offset_fix(offset, chunksize):
-    offset -= offset % chunksize
-    return offset
-
+async def chunk_size(length): return 2 ** max(min(math.ceil(math.log2(length / 1024)), 10), 2) * 1024
+async def offset_fix(offset, chunksize): return offset - (offset % chunksize)
 
 class TGCustomYield:
     def __init__(self):
-        """ A custom method to stream files from telegram. """
         self.main_bot = temp.BOT
 
     @staticmethod
     async def generate_file_properties(msg: Message):
-        media = getattr(msg, msg.media.value, None)
-        file_id_obj = FileId.decode(media.file_id)
-        return file_id_obj
+        return FileId.decode(getattr(msg, msg.media.value).file_id)
 
-    async def generate_media_session(self, client: Client, msg: Message):
-        data = await self.generate_file_properties(msg)
-
-        media_session = client.media_sessions.get(data.dc_id, None)
-
-        if media_session is None:
-            if data.dc_id != await client.storage.dc_id():
-                media_session = Session(
-                    client, data.dc_id, await Auth(client, data.dc_id, await client.storage.test_mode()).create(),
-                    await client.storage.test_mode(), is_media=True
-                )
-                await media_session.start()
-
+    async def generate_media_session(self, c: Client, msg: Message):
+        d = await self.generate_file_properties(msg)
+        ms = c.media_sessions.get(d.dc_id)
+        
+        if not ms:
+            test_mode = await c.storage.test_mode()
+            if d.dc_id != await c.storage.dc_id():
+                ms = Session(c, d.dc_id, await Auth(c, d.dc_id, test_mode).create(), test_mode, is_media=True)
+                await ms.start()
                 for _ in range(3):
-                    exported_auth = await client.invoke(
-                        raw.functions.auth.ExportAuthorization(
-                            dc_id=data.dc_id
-                        )
-                    )
-
+                    ex = await c.invoke(raw.functions.auth.ExportAuthorization(dc_id=d.dc_id))
                     try:
-                        await media_session.send(
-                            raw.functions.auth.ImportAuthorization(
-                                id=exported_auth.id,
-                                bytes=exported_auth.bytes
-                            )
-                        )
-                    except AuthBytesInvalid:
-                        continue
-                    else:
+                        await ms.send(raw.functions.auth.ImportAuthorization(id=ex.id, bytes=ex.bytes))
                         break
+                    except AuthBytesInvalid: continue
                 else:
-                    await media_session.stop()
-                    raise AuthBytesInvalid
+                    await ms.stop(); raise AuthBytesInvalid
             else:
-                media_session = Session(
-                    client, data.dc_id, await client.storage.auth_key(),
-                    await client.storage.test_mode(), is_media=True
-                )
-                await media_session.start()
-
-            client.media_sessions[data.dc_id] = media_session
-
-        return media_session
+                ms = Session(c, d.dc_id, await c.storage.auth_key(), test_mode, is_media=True)
+                await ms.start()
+            c.media_sessions[d.dc_id] = ms
+            
+        return ms
 
     @staticmethod
-    async def get_location(file_id: FileId):
-        file_type = file_id.file_type
+    async def get_location(f: FileId):
+        if f.file_type == FileType.CHAT_PHOTO:
+            peer = raw.types.InputPeerUser(user_id=f.chat_id, access_hash=f.chat_access_hash) if f.chat_id > 0 else (raw.types.InputPeerChat(chat_id=-f.chat_id) if f.chat_access_hash == 0 else raw.types.InputPeerChannel(channel_id=utils.get_channel_id(f.chat_id), access_hash=f.chat_access_hash))
+            return raw.types.InputPeerPhotoFileLocation(peer=peer, volume_id=f.volume_id, local_id=f.local_id, big=f.thumbnail_source == ThumbnailSource.CHAT_PHOTO_BIG)
+        elif f.file_type == FileType.PHOTO:
+            return raw.types.InputPhotoFileLocation(id=f.media_id, access_hash=f.access_hash, file_reference=f.file_reference, thumb_size=f.thumbnail_size)
+        return raw.types.InputDocumentFileLocation(id=f.media_id, access_hash=f.access_hash, file_reference=f.file_reference, thumb_size=f.thumbnail_size)
 
-        if file_type == FileType.CHAT_PHOTO:
-            if file_id.chat_id > 0:
-                peer = raw.types.InputPeerUser(
-                    user_id=file_id.chat_id,
-                    access_hash=file_id.chat_access_hash
-                )
-            else:
-                if file_id.chat_access_hash == 0:
-                    peer = raw.types.InputPeerChat(
-                        chat_id=-file_id.chat_id
-                    )
-                else:
-                    peer = raw.types.InputPeerChannel(
-                        channel_id=utils.get_channel_id(file_id.chat_id),
-                        access_hash=file_id.chat_access_hash
-                    )
+    async def yield_file(self, msg: Message, offset: int, first_cut: int, last_cut: int, parts: int, chunk_size: int):
+        ms = await self.generate_media_session(self.main_bot, msg)
+        loc = await self.get_location(await self.generate_file_properties(msg))
+        
+        # ✅ FIX: For-loop makes streaming perfectly clean without writing request again & again
+        for i in range(1, parts + 1):
+            r = await ms.send(raw.functions.upload.GetFile(location=loc, offset=offset, limit=chunk_size))
+            if not isinstance(r, raw.types.upload.File) or not r.bytes: break
+            
+            chunk = r.bytes
+            if parts == 1: yield chunk[first_cut:last_cut]
+            elif i == 1: yield chunk[first_cut:]
+            elif i == parts: yield chunk[:last_cut]
+            else: yield chunk
+            
+            offset += chunk_size
 
-            location = raw.types.InputPeerPhotoFileLocation(
-                peer=peer,
-                volume_id=file_id.volume_id,
-                local_id=file_id.local_id,
-                big=file_id.thumbnail_source == ThumbnailSource.CHAT_PHOTO_BIG
-            )
-        elif file_type == FileType.PHOTO:
-            location = raw.types.InputPhotoFileLocation(
-                id=file_id.media_id,
-                access_hash=file_id.access_hash,
-                file_reference=file_id.file_reference,
-                thumb_size=file_id.thumbnail_size
-            )
-        else:
-            location = raw.types.InputDocumentFileLocation(
-                id=file_id.media_id,
-                access_hash=file_id.access_hash,
-                file_reference=file_id.file_reference,
-                thumb_size=file_id.thumbnail_size
-            )
-
-        return location
-
-    async def yield_file(self, media_msg: Message, offset: int, first_part_cut: int,
-                         last_part_cut: int, part_count: int, chunk_size: int):
-        client = self.main_bot
-        data = await self.generate_file_properties(media_msg)
-        media_session = await self.generate_media_session(client, media_msg)
-
-        current_part = 1
-        location = await self.get_location(data)
-
-        r = await media_session.send(
-            raw.functions.upload.GetFile(
-                location=location,
-                offset=offset,
-                limit=chunk_size
-            ),
-        )
-
-        if isinstance(r, raw.types.upload.File):
-            while current_part <= part_count:
-                chunk = r.bytes
-                if not chunk:
-                    break
-                
-                # Logic Fix: Properly handling slice for Last Part
-                if part_count == 1:
-                    yield chunk[first_part_cut:last_part_cut]
-                    break
-                
-                if current_part == 1:
-                    yield chunk[first_part_cut:]
-                elif current_part == part_count:
-                    # Fix: Original code missed slicing the last chunk
-                    yield chunk[:last_part_cut]
-                else:
-                    yield chunk
-
-                # Prepare for next chunk
-                offset += chunk_size
-                current_part += 1
-                
-                if current_part <= part_count:
-                    r = await media_session.send(
-                        raw.functions.upload.GetFile(
-                            location=location,
-                            offset=offset,
-                            limit=chunk_size
-                        ),
-                    )
-
-    async def download_as_bytesio(self, media_msg: Message):
-        client = self.main_bot
-        data = await self.generate_file_properties(media_msg)
-        media_session = await self.generate_media_session(client, media_msg)
-
-        location = await self.get_location(data)
-
-        limit = 1024 * 1024
-        offset = 0
-
-        r = await media_session.send(
-            raw.functions.upload.GetFile(
-                location=location,
-                offset=offset,
-                limit=limit
-            )
-        )
-
-        if isinstance(r, raw.types.upload.File):
-            m_file = []
-            while True:
-                chunk = r.bytes
-
-                if not chunk:
-                    break
-
-                m_file.append(chunk)
-                offset += limit
-
-                r = await media_session.send(
-                    raw.functions.upload.GetFile(
-                        location=location,
-                        offset=offset,
-                        limit=limit
-                    )
-                )
-
-            return m_file
-
+    async def download_as_bytesio(self, msg: Message):
+        ms = await self.generate_media_session(self.main_bot, msg)
+        loc = await self.get_location(await self.generate_file_properties(msg))
+        limit, offset, m_file = 1048576, 0, []
+        
+        # ✅ FIX: Single request call dynamically handles full buffering
+        while True:
+            r = await ms.send(raw.functions.upload.GetFile(location=loc, offset=offset, limit=limit))
+            if not isinstance(r, raw.types.upload.File) or not r.bytes: break
+            m_file.append(r.bytes)
+            offset += limit
+            
+        return m_file
