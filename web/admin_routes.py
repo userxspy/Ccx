@@ -160,6 +160,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .login-card .submit-btn:hover{opacity:.85}
 .err-box{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);color:#ff6b6b;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px}
 .theme-corner{position:fixed;top:14px;right:16px;z-index:10}
+
+/* Stats Page Big Card */
+.big-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:30px;text-align:center;margin-bottom:20px;transition:background .25s;}
+.big-stat-val{font-size:48px;font-weight:700;color:var(--accent);margin-bottom:5px;font-family:'DM Sans',sans-serif;}
+.big-stat-label{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;font-family:'Space Mono',monospace;}
 </style>
 """
 
@@ -180,6 +185,7 @@ function initThemeBtn(){
 }
 </script>"""
 
+# ✅ SIDEBAR UPDATED: "Manage Files" (Search) and "Database Stats" (Cards)
 SIDEBAR_HTML = r"""
 <div class="sidebar-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
 <div class="sidebar" id="sidebar">
@@ -188,9 +194,12 @@ SIDEBAR_HTML = r"""
     <button class="sb-close" onclick="closeSidebar()">&#10005;</button>
   </div>
   <nav class="sb-nav">
-    <div class="sb-section">Navigation</div>
+    <div class="sb-section">Menu</div>
     <a href="/dashboard" class="sb-link {active_dash}">
-      <span class="sb-icon">&#8862;</span> Dashboard <span class="sb-arrow">&#8250;</span>
+      <span class="sb-icon">&#8981;</span> Search & Manage <span class="sb-arrow">&#8250;</span>
+    </a>
+    <a href="/stats" class="sb-link {active_stats}">
+      <span class="sb-icon">&#8862;</span> Database Stats <span class="sb-arrow">&#8250;</span>
     </a>
   </nav>
   <div class="sb-footer">
@@ -290,7 +299,8 @@ document.addEventListener('DOMContentLoaded',function(){
 
 def topbar_html(active):
     active_dash = 'active' if active == 'dashboard' else ''
-    sidebar = SIDEBAR_HTML.replace('{active_dash}', active_dash)
+    active_stats = 'active' if active == 'stats' else ''
+    sidebar = SIDEBAR_HTML.replace('{active_dash}', active_dash).replace('{active_stats}', active_stats)
     return f"""
 {sidebar}
 <div class="topbar">
@@ -374,29 +384,15 @@ async def login_post(request):
     return safe_html_response(html)
 
 # ---------------------------------------------
-# DASHBOARD (login required)
+# DASHBOARD (Fast Search)
 # ---------------------------------------------
 @admin_routes.get('/dashboard')
 async def admin_dashboard(request):
     if not is_logged_in(request): return web.HTTPFound('/admin')
-    try:
-        stats = await db_count_documents()
-    except Exception:
-        stats = {}
-    try:
-        total_u = await user_db.total_users_count()
-    except Exception:
-        total_u = 0
-        
-    if isinstance(stats, int):
-        stats = {'total': stats, 'primary': stats, 'cloud': 0, 'archive': 0}
-        
-    p_count = stats.get('primary', 0)
-    c_count = stats.get('cloud', 0)
-    a_count = stats.get('archive', 0)
     tb = topbar_html('dashboard')
     
-    html = f"""<!DOCTYPE html><html><head><title>Dashboard</title>{SHARED_HEAD}{THEME_JS}</head><body>
+    # ✅ FIX: Stats counting removed from here for SUPERFAST Loading!
+    html = f"""<!DOCTYPE html><html><head><title>Search Files</title>{SHARED_HEAD}{THEME_JS}</head><body>
 {tb}
 {SIDEBAR_JS}
 <div class="search-zone">
@@ -409,37 +405,72 @@ async def admin_dashboard(request):
     </div>
     <div class="search-wrap">
       <span class="s-icon">&#9906;</span>
-      <input class="search-input" id="q" placeholder="Movie name, series, quality&#8230;">
+      <input class="search-input" id="q" placeholder="Search movies or series&#8230;">
     </div>
     <button class="search-btn" onclick="doSearch(0)">Search</button>
   </div>
 </div>
-<div class="main">
-  <div class="stats-row">
-    <div class="scard green"><div class="scard-label">Primary</div><div class="scard-val">{p_count:,}</div><div class="scard-sub">Main collection</div></div>
-    <div class="scard blue"><div class="scard-label">Cloud</div><div class="scard-val">{c_count:,}</div><div class="scard-sub">Remote storage</div></div>
-    <div class="scard amber"><div class="scard-label">Archive</div><div class="scard-val">{a_count:,}</div><div class="scard-sub">Backup files</div></div>
-    <div class="scard red"><div class="scard-label">Users</div><div class="scard-val">{total_u:,}</div><div class="scard-sub">Total registered</div></div>
-  </div>
-  
+<div class="main" style="padding-top: 15px;">
   <div class="results-info" id="resInfo">
     <span class="results-count" id="resCount"></span>
     <span class="results-hint">Click Play to stream file</span>
   </div>
-  
   <div id="results">
     <div class="empty"><div class="empty-icon">&#9672;</div><p>Type a movie or series name above<br>and press Search</p></div>
   </div>
-  
   <div class="pagination" id="pageBox">
     <button class="pg-btn" id="pBtn" onclick="prev()" disabled>&#8592; Previous</button>
     <span class="pg-info" id="pgInfo">Page 1</span>
     <button class="pg-btn" id="nBtn" onclick="next()">Next &#8594;</button>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 {SEARCH_JS}
+</body></html>"""
+    return safe_html_response(html)
+
+# ---------------------------------------------
+# NEW PAGE: STATS
+# ---------------------------------------------
+@admin_routes.get('/stats')
+async def stats_page(request):
+    if not is_logged_in(request): return web.HTTPFound('/admin')
+    try: stats = await db_count_documents()
+    except: stats = {}
+    try: total_u = await user_db.total_users_count()
+    except: total_u = 0
+        
+    if isinstance(stats, int):
+        stats = {'total': stats, 'primary': stats, 'cloud': 0, 'archive': 0}
+        
+    p_count = stats.get('primary', 0)
+    c_count = stats.get('cloud', 0)
+    a_count = stats.get('archive', 0)
+    t_count = stats.get('total', 0)
+    tb = topbar_html('stats')
+    
+    # ✅ FIX: This page is dedicated only for showing 4 beautiful stats cards!
+    html = f"""<!DOCTYPE html><html><head><title>Database Stats</title>{SHARED_HEAD}{THEME_JS}
+    <style>
+        .big-stat {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 35px 20px; text-align: center; margin-bottom: 25px; transition: background .25s, border-color .25s; }}
+        .big-stat-val {{ font-size: 46px; font-weight: 700; color: var(--accent); margin-bottom: 8px; font-family: 'DM Sans', sans-serif; }}
+        .big-stat-label {{ font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-family: 'Space Mono', monospace; }}
+    </style>
+    </head><body>
+{tb}
+{SIDEBAR_JS}
+<div class="main" style="padding-top: 30px;">
+  <div class="big-stat">
+     <div class="big-stat-val">{t_count:,}</div>
+     <div class="big-stat-label">Total Files in Database</div>
+  </div>
+  <div class="stats-row">
+    <div class="scard green"><div class="scard-label">Primary</div><div class="scard-val">{p_count:,}</div><div class="scard-sub">Main collection</div></div>
+    <div class="scard blue"><div class="scard-label">Cloud</div><div class="scard-val">{c_count:,}</div><div class="scard-sub">Remote storage</div></div>
+    <div class="scard amber"><div class="scard-label">Archive</div><div class="scard-val">{a_count:,}</div><div class="scard-sub">Backup files</div></div>
+    <div class="scard red"><div class="scard-label">Users</div><div class="scard-val">{total_u:,}</div><div class="scard-sub">Total registered</div></div>
+  </div>
+</div>
 </body></html>"""
     return safe_html_response(html)
 
