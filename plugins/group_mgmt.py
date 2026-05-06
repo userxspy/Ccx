@@ -122,26 +122,35 @@ async def config_handler(c, m):
 # 👁️ SMART WATCHER
 # =========================
 
+# ✅ टाइमर वाला फंक्शन (Background deletion के लिए)
+async def delayed_delete(msg, delay):
+    await asyncio.sleep(delay)
+    try: await msg.delete()
+    except: pass
+
 @Client.on_message(filters.group & filters.text, group=10)
 async def chat_watcher(c, m):
     text = m.text.lower()
     data = await get_settings(m.chat.id)
     
-    # Block A: DLink (For Everyone)
+    # ----------------------------------------------------
+    # Block A: DLink (APPLIES TO EVERYONE - Even Admins)
+    # ----------------------------------------------------
     dlinks = data.get("dlink", {})
     for w, delay in dlinks.items():
         # Match word exactly OR match word with wildcard prefix 
         if w in text or (w.endswith("*") and text.startswith(w[:-1])):
-            asyncio.create_task(asyncio.sleep(delay))
-            try: await m.delete()
-            except: pass
+            # Task को background में डाल दिया ताकि बॉट रुके नहीं
+            asyncio.create_task(delayed_delete(m, delay))
             return 
 
-    # Block B: Blacklist (Ignore Admins)
+    # ----------------------------------------------------
+    # Block B: Blacklist (ONLY FOR MEMBERS, Ignore Admins)
+    # ----------------------------------------------------
     if await is_admin(c, m): return
     
     for w in data.get("blacklist", []):
-        if w in text:
+        if w in text or (w.endswith("*") and text.startswith(w[:-1])):
             try: await m.delete()
             except: pass
             return
