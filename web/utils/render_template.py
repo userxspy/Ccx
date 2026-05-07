@@ -367,12 +367,13 @@ watch_tmplt = """
 
         const player = new Plyr('#player', {{
 
-            // Removed 'mute' and 'volume' from controls below
+            // Added 'mute' back, but left out 'volume'
             controls: [
                 'play-large',
                 'play',
                 'progress',
                 'current-time',
+                'mute',
                 'settings',
                 'pip',
                 'fullscreen'
