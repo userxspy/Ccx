@@ -20,16 +20,14 @@ watch_tmplt = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{heading}</title>
 
-    <!-- Fonts -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap">
 
-    <!-- Plyr -->
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
 
     <style>
 
         :root {{
-            --primary-red: #ff0000;
+            --primary-red: #e50914; /* Updated to match screenshot */
             --bg-dark: #0b0b0b;
             --card-dark: #141414;
             --text-light: #ffffff;
@@ -63,21 +61,38 @@ watch_tmplt = """
             backdrop-filter: blur(6px);
         }}
 
-        .logo-wrap {{
+        /* CUSTOM CSS LOGO (Matches Screenshot Exactly) */
+        .ff-logo {{
             display: flex;
             align-items: center;
-        }}
-
-        .site-logo {{
-            height: 58px;
-            width: auto;
-            object-fit: contain;
-            filter: drop-shadow(0 0 12px rgba(255,0,0,0.55));
+            gap: 10px;
+            cursor: pointer;
             transition: 0.3s ease;
         }}
 
-        .site-logo:hover {{
+        .ff-logo:hover {{
             transform: scale(1.03);
+        }}
+
+        .ff-icon {{
+            background-color: var(--primary-red);
+            color: #ffffff;
+            font-size: 26px;
+            font-weight: 800;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+        }}
+
+        .ff-text {{
+            color: var(--primary-red);
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-shadow: 0 0 15px rgba(229, 9, 20, 0.4);
         }}
 
         /* ───────── MAIN ───────── */
@@ -162,7 +177,7 @@ watch_tmplt = """
         .btn-download {{
             background: var(--primary-red);
             color: white;
-            box-shadow: 0 0 18px rgba(255,0,0,0.35);
+            box-shadow: 0 0 18px rgba(229,9,20,0.35);
         }}
 
         .btn-download:hover {{
@@ -184,18 +199,18 @@ watch_tmplt = """
         /* ───────── PLYR CUSTOM ───────── */
 
         .plyr--video {{
-            --plyr-color-main: #ff0000;
+            --plyr-color-main: #e50914;
             --plyr-video-background: #000000;
             border-radius: 18px;
             overflow: hidden;
         }}
 
         .plyr__control--overlaid {{
-            background: rgba(255,0,0,0.9) !important;
+            background: rgba(229,9,20,0.9) !important;
         }}
 
         .plyr__control:hover {{
-            background: rgba(255,0,0,0.8) !important;
+            background: rgba(229,9,20,0.8) !important;
         }}
 
         /* ───────── TOAST ───────── */
@@ -204,7 +219,7 @@ watch_tmplt = """
             visibility: hidden;
             min-width: 220px;
 
-            background: #ff0000;
+            background: var(--primary-red);
             color: white;
 
             text-align: center;
@@ -258,8 +273,14 @@ watch_tmplt = """
                 padding-top: 95px;
             }}
 
-            .site-logo {{
-                height: 46px;
+            .ff-icon {{
+                width: 36px;
+                height: 36px;
+                font-size: 22px;
+            }}
+
+            .ff-text {{
+                font-size: 22px;
             }}
 
             .title {{
@@ -281,47 +302,35 @@ watch_tmplt = """
 
 <body>
 
-    <!-- NAVBAR -->
     <div class="navbar">
 
-        <div class="logo-wrap">
-
-            <!-- YOUR FAST FINDER LOGO -->
-            <img
-                src="https://iili.io/3JX0rvt.jpg"
-                alt="Fast Finder"
-                class="site-logo"
-            >
-
+        <div class="ff-logo">
+            <div class="ff-icon">F</div>
+            <div class="ff-text">FAST FINDER</div>
         </div>
 
     </div>
 
-    <!-- MAIN -->
     <div class="hero-container">
 
-        <!-- PLAYER -->
         <div class="player-box">
 
             <video
                 id="player"
                 playsinline
                 controls
-                poster="https://i.imgur.com/8mKX7Qp.jpeg"
             >
                 <source src="{src}" type="{mime_type}">
             </video>
 
         </div>
 
-        <!-- INFO -->
         <div class="info-section">
 
             <div class="title">{file_name}</div>
 
             <div class="controls-row">
 
-                <!-- DOWNLOAD -->
                 <a href="{src}" class="btn btn-download">
 
                     <svg fill="currentColor" viewBox="0 0 24 24">
@@ -332,7 +341,6 @@ watch_tmplt = """
 
                 </a>
 
-                <!-- COPY -->
                 <button onclick="copyLink()" class="btn btn-copy">
 
                     <svg fill="currentColor" viewBox="0 0 24 24">
@@ -349,25 +357,22 @@ watch_tmplt = """
 
     </div>
 
-    <!-- TOAST -->
     <div id="toast">
         Link Copied Successfully!
     </div>
 
-    <!-- Plyr -->
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
 
     <script>
 
         const player = new Plyr('#player', {{
 
+            // Removed 'mute' and 'volume' from controls below
             controls: [
                 'play-large',
                 'play',
                 'progress',
                 'current-time',
-                'mute',
-                'volume',
                 'settings',
                 'pip',
                 'fullscreen'
@@ -463,7 +468,7 @@ async def media_watch(message_id):
                     <a
                         href="{src}"
                         style="
-                            background:#ff0000;
+                            background:#e50914;
                             color:white;
                             padding:14px 24px;
                             border-radius:10px;
